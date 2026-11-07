@@ -20,6 +20,7 @@ import {
   TransportKind,
 } from 'vscode-languageclient/node';
 import { registerFileDecorations } from './fileDecorations';
+import { hasMoquiRootMarker } from './moquiRoot';
 import { mergeMessages, nlsFileName } from './nls';
 import { XML_FILE_ASSOCIATIONS, XmlFileAssociation } from './xmlAssociations';
 
@@ -44,7 +45,7 @@ function workspaceHasMoquiMarker(): boolean {
 
 function moquiWorkspaceFolders() {
   return (workspace.workspaceFolders ?? []).filter((folder) =>
-    fs.existsSync(path.join(folder.uri.fsPath, 'MoquiInit.properties')),
+    hasMoquiRootMarker(folder.uri.fsPath),
   );
 }
 

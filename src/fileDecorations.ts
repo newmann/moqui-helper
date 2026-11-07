@@ -13,6 +13,7 @@ import {
   workspace,
 } from 'vscode';
 import { FileKind, ROOT_PREFIX_LENGTH, fileKindForRoot, readRootTag } from './fileKind';
+import { MOQUI_ROOT_MARKERS, hasMoquiRootMarker } from './moquiRoot';
 
 interface DiskCacheEntry {
   mtimeMs: number;
@@ -36,17 +37,19 @@ class MoquiFileDecorationProvider implements FileDecorationProvider, Disposable 
 
   constructor(private readonly messages: Record<string, string>) {
     const xmlWatcher = workspace.createFileSystemWatcher('**/*.xml');
-    const markerWatcher = workspace.createFileSystemWatcher('**/MoquiInit.properties');
+    const markerWatchers = MOQUI_ROOT_MARKERS.map((name) => workspace.createFileSystemWatcher(`**/${name}`));
     this.subscriptions.push(
       this.emitter,
       xmlWatcher,
-      markerWatcher,
+      ...markerWatchers,
       xmlWatcher.onDidCreate((uri) => this.invalidate(uri)),
       xmlWatcher.onDidChange((uri) => this.invalidate(uri)),
       xmlWatcher.onDidDelete((uri) => this.invalidate(uri)),
-      markerWatcher.onDidCreate(() => this.refreshAll()),
-      markerWatcher.onDidChange(() => this.refreshAll()),
-      markerWatcher.onDidDelete(() => this.refreshAll()),
+      ...markerWatchers.flatMap((markerWatcher) => [
+        markerWatcher.onDidCreate(() => this.refreshAll()),
+        markerWatcher.onDidChange(() => this.refreshAll()),
+        markerWatcher.onDidDelete(() => this.refreshAll()),
+      ]),
       workspace.onDidChangeWorkspaceFolders(() => this.refreshAll()),
       workspace.onDidChangeTextDocument((event) => this.onDocumentChange(event.document)),
       workspace.onDidCloseTextDocument((document) => this.onDocumentClose(document)),
@@ -96,7 +99,7 @@ class MoquiFileDecorationProvider implements FileDecorationProvider, Disposable 
     if (!this.cachedRoots) {
       this.cachedRoots = (workspace.workspaceFolders ?? [])
         .map((folder) => folder.uri.fsPath)
-        .filter((root) => fs.existsSync(path.join(root, 'MoquiInit.properties')));
+        .filter((root) => hasMoquiRootMarker(root));
     }
     return this.cachedRoots;
   }

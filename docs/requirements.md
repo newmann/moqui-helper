@@ -2,9 +2,7 @@
 
 ## 背景
 
-`moqui-idea-plugin` 是 IntelliJ IDEA 插件。它的模型、索引和界面都绑在 IntelliJ PSI / DOM 上，不能直接变成 Cursor 或 VS Code 扩展。
-
-本仓库按同一套 Moqui Framework 3 XML 能力重写。交付物是一个标准 VS Code 扩展，Cursor 以及其他使用该扩展 API 的桌面编辑器安装同一份 VSIX。
+本仓库是 Moqui Framework 3 的 XML 辅助扩展。交付物是一个标准 VS Code 扩展，Cursor 以及其他使用该扩展 API 的桌面编辑器安装同一份 VSIX。
 
 ## 运行环境
 
@@ -24,7 +22,7 @@
 
 - `engines.vscode` 为 `^1.85.0`
 - 只使用稳定 API，不使用 proposed API、原生模块或某个编辑器的私有接口
-- 只有工作区文件夹根目录存在 `MoquiInit.properties` 时才激活语言服务并建立索引
+- 只有工作区文件夹根目录存在 `MoquiInit.properties` 或 `moq` 时才激活语言服务并建立索引
 
 ## 支持的 XML 根标签
 
@@ -37,7 +35,7 @@
 ### P0 本阶段：仓库与骨架
 
 - 本地 Git 仓库、扩展工程、`AGENTS.md`、本需求文档
-- 扩展在发现根目录 `MoquiInit.properties` 后启动语言服务
+- 扩展在发现根目录 `MoquiInit.properties` 或 `moq` 后启动语言服务
 - 语言服务只完成 LSP `initialize`，不提供补全、跳转或诊断
 
 验收：
@@ -76,7 +74,5 @@
 - Groovy 注入，以及 `ec.entity.find(...)`、`ServiceCallSync.name(...)` 的补全
 - Admin 工具窗
 - 按实体、服务、屏幕划分的自定义项目视图
-
-IntelliJ 插件继续单独维护，本仓库不替代它。
 
 P4 及以后的需求见 [req-phase2.md](req-phase2.md)。

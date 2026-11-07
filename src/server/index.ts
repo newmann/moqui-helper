@@ -13,6 +13,7 @@ import {
   TextDocuments,
   TextDocumentSyncKind,
 } from 'vscode-languageserver/node';
+import { hasMoquiRootMarker } from '../moquiRoot';
 import { WorkspaceIndex } from './index/workspace';
 import { Messages } from './messages';
 import { fsPathToUri, isComponentXmlPath, isInside, isSkippedRelative, toPosix, uriToFsPath } from './paths';
@@ -300,7 +301,7 @@ function readMessages(options: unknown): Messages {
 }
 
 function rootsWithMarker(roots: readonly string[]): string[] {
-  return roots.filter((root) => fs.existsSync(path.join(root, 'MoquiInit.properties')));
+  return roots.filter((root) => hasMoquiRootMarker(root));
 }
 
 function isIndexable(fsPath: string): boolean {

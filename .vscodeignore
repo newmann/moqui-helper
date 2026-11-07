@@ -1,10 +1,15 @@
 .vscode/**
-src/**
+.vscode-test/**
 node_modules/**
+src/**
+test/**
 docs/**
+scripts/**
+out-test/**
 **/*.ts
 **/*.map
 .gitignore
 tsconfig.json
+tsconfig.test.json
 AGENTS.md
-README.md
+*.vsix

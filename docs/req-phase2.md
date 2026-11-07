@@ -1,14 +1,12 @@
 # Moqui Helper 后续需求
 
-P0–P3 以 [requirements.md](requirements.md) 为准，并且已经落地。本文件只收 IntelliJ 插件里已经启用、而本仓库还没有的编辑能力。
+P0–P3 以 [requirements.md](requirements.md) 为准，并且已经落地。本文件收录尚未实现的编辑能力。
 
 仍然不做：
 
 - Groovy 注入，以及 `ec.entity.find(...)`、`ServiceCallSync.name(...)` 的补全
 - Admin 工具窗
 - 按实体、服务、屏幕划分的自定义项目视图
-
-插件里已注释掉的检查、Screen 编辑器和 Web 工具窗不在本文件中。
 
 分期按依赖和日常编辑频率。每一期可以单独做完并验收。P10 不依赖前面各期，可以提前做。
 

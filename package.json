@@ -3,12 +3,12 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "0.1.0",
-  "publisher": "Newmann Hu",
-  "license": "MIT",
+  "publisher": "newmann",
+  "license": "CC0-1.0",
   "author": {
     "name": "Newmann Hu",
     "email": "newmannhu@qq.com",
-    "url": "https://github.com/newmannhu"
+    "url": "https://github.com/newmann"
   },
   "icon": "images/icon.png",
   "engines": {
@@ -17,8 +17,13 @@
   "categories": [
     "Programming Languages"
   ],
+  "keywords": [
+    "moqui",
+    "xml"
+  ],
   "activationEvents": [
-    "workspaceContains:MoquiInit.properties"
+    "workspaceContains:MoquiInit.properties",
+    "workspaceContains:moq"
   ],
   "extensionDependencies": [
     "redhat.vscode-xml"
@@ -149,23 +154,28 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "tsc -p ./ --noEmit && node scripts/esbuild.mjs",
+    "watch": "node scripts/esbuild.mjs --watch",
     "test": "node scripts/check-catalog.mjs && tsc -p tsconfig.test.json && node --test \"out-test/test/**/*.test.js\"",
-    "vscode:prepublish": "npm run compile"
-  },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.16"
+    "package": "vsce package",
+    "vscode:prepublish": "tsc -p ./ --noEmit && node scripts/esbuild.mjs --production"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.8.2"
+    "@vscode/vsce": "^4.1.0",
+    "esbuild": "^0.25.5",
+    "typescript": "^5.8.2",
+    "vscode-languageclient": "^9.0.1",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.16"
   },
   "repository": {
-  "type": "git",
-  "url": "https://github.com/newmann/moqui-helper"
+    "type": "git",
+    "url": "https://github.com/newmann/moqui-helper"
+  },
+  "homepage": "https://github.com/newmann/moqui-helper",
+  "bugs": {
+    "url": "https://github.com/newmann/moqui-helper/issues"
   }
 }
