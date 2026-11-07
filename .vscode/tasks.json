@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Extension (no debug)",
+      "type": "process",
+      "command": "${execPath}",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+      "dependsOn": "npm: compile",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "revealProblems": "onProblem",
+        "panel": "shared",
+        "close": true
+      }
+    }
+  ]
+}

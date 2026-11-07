@@ -1,8 +1,16 @@
 {
   "name": "moqui-helper",
-  "displayName": "Moqui Helper",
-  "description": "Moqui Framework 3 XML assistance for VS Code compatible editors.",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "0.1.0",
+  "publisher": "Newmann Hu",
+  "license": "MIT",
+  "author": {
+    "name": "Newmann Hu",
+    "email": "newmannhu@qq.com",
+    "url": "https://github.com/newmannhu"
+  },
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -12,18 +20,152 @@
   "activationEvents": [
     "workspaceContains:MoquiInit.properties"
   ],
+  "extensionDependencies": [
+    "redhat.vscode-xml"
+  ],
   "main": "./out/extension.js",
+  "contributes": {
+    "colors": [
+      {
+        "id": "moquiHelper.fileKind.entities",
+        "description": "%fileKindColorEntities%",
+        "defaults": {
+          "dark": "#4FC1FF",
+          "light": "#0451A5",
+          "highContrast": "#4FC1FF",
+          "highContrastLight": "#0451A5"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.services",
+        "description": "%fileKindColorServices%",
+        "defaults": {
+          "dark": "#3DDC97",
+          "light": "#0E7A45",
+          "highContrast": "#3DDC97",
+          "highContrastLight": "#0E7A45"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.secas",
+        "description": "%fileKindColorSecas%",
+        "defaults": {
+          "dark": "#FFB454",
+          "light": "#A15C00",
+          "highContrast": "#FFB454",
+          "highContrastLight": "#A15C00"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.eecas",
+        "description": "%fileKindColorEecas%",
+        "defaults": {
+          "dark": "#C586C0",
+          "light": "#8A3A8A",
+          "highContrast": "#C586C0",
+          "highContrastLight": "#8A3A8A"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.emecas",
+        "description": "%fileKindColorEmecas%",
+        "defaults": {
+          "dark": "#F48FB1",
+          "light": "#A1264D",
+          "highContrast": "#F48FB1",
+          "highContrastLight": "#A1264D"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.screen",
+        "description": "%fileKindColorScreen%",
+        "defaults": {
+          "dark": "#4DD0E1",
+          "light": "#0E7490",
+          "highContrast": "#4DD0E1",
+          "highContrastLight": "#0E7490"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.moquiConf",
+        "description": "%fileKindColorMoquiConf%",
+        "defaults": {
+          "dark": "#DCDCAA",
+          "light": "#7A6400",
+          "highContrast": "#DCDCAA",
+          "highContrastLight": "#7A6400"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.resource",
+        "description": "%fileKindColorResource%",
+        "defaults": {
+          "dark": "#F48771",
+          "light": "#B83B2E",
+          "highContrast": "#F48771",
+          "highContrastLight": "#B83B2E"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.component",
+        "description": "%fileKindColorComponent%",
+        "defaults": {
+          "dark": "#CE9178",
+          "light": "#8A4B2F",
+          "highContrast": "#CE9178",
+          "highContrastLight": "#8A4B2F"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.widgetTemplates",
+        "description": "%fileKindColorWidgetTemplates%",
+        "defaults": {
+          "dark": "#B5A0FF",
+          "light": "#5B3FA0",
+          "highContrast": "#B5A0FF",
+          "highContrastLight": "#5B3FA0"
+        }
+      },
+      {
+        "id": "moquiHelper.fileKind.entityFacadeXml",
+        "description": "%fileKindColorEntityFacadeXml%",
+        "defaults": {
+          "dark": "#B5CEA8",
+          "light": "#3F6B32",
+          "highContrast": "#B5CEA8",
+          "highContrastLight": "#3F6B32"
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[xml]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "on"
+        },
+        "editor.wordBasedSuggestions": "off"
+      }
+    }
+  },
   "scripts": {
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test": "node scripts/check-catalog.mjs && tsc -p tsconfig.test.json && node --test \"out-test/test/**/*.test.js\"",
+    "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1"
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.16"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",
     "@types/vscode": "^1.85.0",
     "typescript": "^5.8.2"
+  },
+  "repository": {
+  "type": "git",
+  "url": "https://github.com/newmann/moqui-helper"
   }
 }

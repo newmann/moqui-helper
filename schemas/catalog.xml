@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+    <system systemId="http://moqui.org/xsd/common-types-3.xsd" uri="common-types-3.xsd"/>
+    <uri name="http://moqui.org/xsd/common-types-3.xsd" uri="common-types-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/email-eca-3.xsd" uri="email-eca-3.xsd"/>
+    <uri name="http://moqui.org/xsd/email-eca-3.xsd" uri="email-eca-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/entity-definition-3.xsd" uri="entity-definition-3.xsd"/>
+    <uri name="http://moqui.org/xsd/entity-definition-3.xsd" uri="entity-definition-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/entity-eca-3.xsd" uri="entity-eca-3.xsd"/>
+    <uri name="http://moqui.org/xsd/entity-eca-3.xsd" uri="entity-eca-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/entity-facade-xml-3.xsd" uri="entity-facade-xml-3.xsd"/>
+    <uri name="http://moqui.org/xsd/entity-facade-xml-3.xsd" uri="entity-facade-xml-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/moqui-conf-3.xsd" uri="moqui-conf-3.xsd"/>
+    <uri name="http://moqui.org/xsd/moqui-conf-3.xsd" uri="moqui-conf-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/rest-api-3.xsd" uri="rest-api-3.xsd"/>
+    <uri name="http://moqui.org/xsd/rest-api-3.xsd" uri="rest-api-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/service-definition-3.xsd" uri="service-definition-3.xsd"/>
+    <uri name="http://moqui.org/xsd/service-definition-3.xsd" uri="service-definition-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/service-eca-3.xsd" uri="service-eca-3.xsd"/>
+    <uri name="http://moqui.org/xsd/service-eca-3.xsd" uri="service-eca-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/xml-actions-3.xsd" uri="xml-actions-3.xsd"/>
+    <uri name="http://moqui.org/xsd/xml-actions-3.xsd" uri="xml-actions-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/xml-form-3.xsd" uri="xml-form-3.xsd"/>
+    <uri name="http://moqui.org/xsd/xml-form-3.xsd" uri="xml-form-3.xsd"/>
+
+    <system systemId="http://moqui.org/xsd/xml-screen-3.xsd" uri="xml-screen-3.xsd"/>
+    <uri name="http://moqui.org/xsd/xml-screen-3.xsd" uri="xml-screen-3.xsd"/>
+</catalog>
