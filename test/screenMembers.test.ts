@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { describe, it } from 'node:test';
-import { Hover, TextDocumentEdit, WorkspaceEdit } from 'vscode-languageserver';
+import { DiagnosticSeverity, Hover, TextDocumentEdit, WorkspaceEdit } from 'vscode-languageserver';
 import { fsPathToUri } from '../src/server/paths';
 import { WorkspaceIndex } from '../src/server/index/workspace';
 import { Messages } from '../src/server/messages';
@@ -19,6 +19,7 @@ const messages: Messages = {
   unresolvedEntity: 'missing entity {0}',
   unresolvedScreen: 'missing screen {0}',
   unresolvedTransition: 'missing transition {0}',
+  dynamicUrl: 'dynamic url {0}',
   unresolvedSection: 'missing section {0}',
   unresolvedForm: 'missing form {0}',
   unresolvedSubscreensItem: 'missing subscreens-item {0}',
@@ -235,6 +236,26 @@ describe('screen members', () => {
     );
   });
 
+  it('resolves a default-item to the screen in the matching directory', () => {
+    const index = indexed();
+    const text = '<screen><subscreens default-item="RequestCommentUpdate"/></screen>';
+    const offset = at(text, 'default-item="RequestCommentUpdate"') + 'default-item="'.length;
+    const commentUpdatePath = path.join(partyDir, 'Find', 'RequestCommentUpdate.xml');
+    assert.equal(definitionAt(text, offset, findPath, index)?.[0].uri, fsPathToUri(commentUpdatePath));
+    assert.equal(
+      hoverValue(hoverAt(text, offset, findPath, index, messages)),
+      'screen component://app/screen/Party/Find/RequestCommentUpdate.xml',
+    );
+    assert.ok(
+      labelsAt('<screen><subscreens default-item="Req"/></screen>', 'Req', index, findPath).includes('RequestCommentUpdate'),
+    );
+    assert.equal(
+      labelsAt('<screen><subscreens default-item="Det"/></screen>', 'Det', index, findPath).includes('Detail'),
+      false,
+    );
+    assert.equal(collectDiagnostics(text, findPath, index, messages).length, 0);
+  });
+
   it('prefers a local transition over a same-named subscreen', () => {
     const index = indexed();
     const text = '<screen><transition name="RequestCommentUpdate"/><dynamic-dialog transition="RequestCommentUpdate"/></screen>';
@@ -325,5 +346,201 @@ describe('screen members', () => {
     index.replaceFile(fsPathToUri(findPath), findPath, twins);
     const ambiguous = renameAt(twins, at(twins, 'save'), findPath, index, 'store', options);
     assert.deepEqual(ambiguous, { message: 'ambiguous save' });
+  });
+
+  it('resolves screen paths and transitions from the updated schemas', () => {
+    const index = indexed();
+    const text = [
+      '<screen>',
+      '  <form-list name="Rows" peek-url="save">',
+      '    <view-board transition="save"/>',
+      '    <view-calendar create-screen="./RequestCommentUpdate" create-transition="save"/>',
+      '  </form-list>',
+      '  <ext-action name="boss.open" slot="message-actions" screen="Detail" transition="missingMove"/>',
+      '  <ext-action name="boss.path" slot="message-actions" screen="../Detail"/>',
+      '  <ext-action name="boss.gone" slot="message-actions" screen="MissingScreen"/>',
+      '  <keymap><key keys="ctrl+k" screen="Other"/></keymap>',
+      '  <text-area mention-transition="https://example.test/search"/>',
+      '  <text-area record-transition="${skip}"/>',
+      '  <status-bar status-id="Open" transition="nope"/>',
+      '</screen>',
+    ].join('\n');
+
+    const board = at(text, 'view-board transition="save"') + 'view-board transition="'.length;
+    assert.equal(definitionAt(text, board, findPath, index)?.[0].uri, fsPathToUri(findPath));
+    assert.equal(hoverValue(hoverAt(text, board, findPath, index, messages)), 'transition save');
+    assert.ok(
+      labelsAt('<screen><form-list><view-board transition="sa"/></form-list></screen>', 'sa', index, findPath).includes('save'),
+    );
+
+    const peek = at(text, 'peek-url="save"') + 'peek-url="'.length;
+    assert.equal(hoverValue(hoverAt(text, peek, findPath, index, messages)), 'transition save');
+
+    const detail = at(text, 'screen="Detail"') + 'screen="'.length;
+    assert.equal(definitionAt(text, detail, findPath, index)?.[0].uri, fsPathToUri(detailPath));
+    assert.ok(
+      labelsAt('<screen><ext-action name="a" slot="s" screen="Det"/></screen>', 'Det', index, findPath).includes('Detail'),
+    );
+    assert.equal(
+      labelsAt('<screen><ext-action name="a" slot="s" screen="sa"/></screen>', 'sa', index, findPath).includes('save'),
+      false,
+    );
+
+    const relative = at(text, 'screen="../Detail"') + 'screen="'.length;
+    assert.equal(definitionAt(text, relative, findPath, index)?.[0].uri, fsPathToUri(detailPath));
+    const created = at(text, 'create-screen="./RequestCommentUpdate"') + 'create-screen="'.length;
+    assert.equal(
+      definitionAt(text, created, findPath, index)?.[0].uri,
+      fsPathToUri(path.join(partyDir, 'Find', 'RequestCommentUpdate.xml')),
+    );
+    const other = at(text, 'screen="Other"') + 'screen="'.length;
+    assert.equal(definitionAt(text, other, findPath, index)?.[0].uri, fsPathToUri(otherPath));
+
+    const reported = collectDiagnostics(text, findPath, index, messages).map((item) => item.message).sort();
+    assert.deepEqual(reported, [
+      'missing screen MissingScreen',
+      'missing transition missingMove',
+      'missing transition nope',
+    ]);
+  });
+
+  it('resolves a token-route transition on the screen it names', () => {
+    const index = indexed();
+    const text = [
+      '<moqui-conf>',
+      '  <webapp name="webroot">',
+      '    <token-route name="s" screen-location="component://app/screen/Party/Detail.xml" token-service="missing.Service.get#Token" post-transition="load"/>',
+      '    <token-route name="plain" screen-location="not-a-path" token-service="${skip}" post-transition="load"/>',
+      '    <token-route name="gone" screen-location="component://app/screen/Party/Missing.xml" token-service="${skip}" post-transition="load"/>',
+      '  </webapp>',
+      '</moqui-conf>',
+    ].join('\n');
+    const post = at(text, 'post-transition="load"') + 'post-transition="'.length;
+    assert.equal(definitionAt(text, post, findPath, index)?.[0].uri, fsPathToUri(detailPath));
+    assert.equal(
+      hoverValue(hoverAt(text, post, findPath, index, messages)),
+      'transition load from component://app/screen/Party/Detail.xml',
+    );
+    const reported = collectDiagnostics(text, findPath, index, {
+      ...messages,
+      unresolvedService: 'missing service {0}',
+    }).map((item) => item.message).sort();
+    assert.deepEqual(reported, [
+      'missing screen component://app/screen/Party/Missing.xml',
+      'missing service missing.Service.get#Token',
+    ]);
+  });
+
+  it('resolves a screen url without a path separator by the first letter', () => {
+    const index = indexed();
+    const lower = labelsAt('<screen><link url="sa"/></screen>', 'sa', index, findPath);
+    assert.ok(lower.includes('save'));
+    assert.equal(lower.includes('RequestCommentUpdate'), false);
+    assert.equal(lower.includes('OnlyItem'), false);
+    const upper = labelsAt('<screen><link url="Req"/></screen>', 'Req', index, findPath);
+    assert.ok(upper.includes('RequestCommentUpdate'));
+    assert.equal(upper.includes('save'), false);
+    const emptyText = '<screen><link url=""/></screen>';
+    const emptyAt = emptyText.indexOf('url="') + 'url="'.length;
+    const empty = completionAt(emptyText, emptyAt, index, findPath)?.map((item) => item.label) ?? [];
+    assert.ok(empty.includes('save'));
+    assert.ok(empty.includes('RequestCommentUpdate'));
+    assert.ok(empty.includes('OnlyItem'));
+    assert.equal(empty.includes('Detail'), false);
+
+    const saveLink = '<screen><link url="save"/></screen>';
+    const saveOffset = at(saveLink, 'url="save"') + 'url="'.length;
+    assert.deepEqual(definitionAt(saveLink, saveOffset, findPath, index), [
+      { uri: fsPathToUri(findPath), range: rangeOf(findText, 'save') },
+    ]);
+    assert.equal(hoverValue(hoverAt(saveLink, saveOffset, findPath, index, messages)), 'transition save');
+
+    const queried = '<screen><link url="save?x=1"/></screen>';
+    const queriedOffset = at(queried, 'url="save?') + 'url="'.length;
+    assert.deepEqual(definitionAt(queried, queriedOffset, findPath, index), [
+      { uri: fsPathToUri(findPath), range: rangeOf(findText, 'save') },
+    ]);
+
+    const response = '<screen><transition name="save"><default-response url="save"/></transition></screen>';
+    const responseOffset = at(response, 'url="save"') + 'url="'.length;
+    assert.equal(definitionAt(response, responseOffset, findPath, index)?.[0].uri, fsPathToUri(findPath));
+
+    const nested = '<screen><link url="RequestCommentUpdate"/></screen>';
+    const nestedOffset = at(nested, 'url="RequestCommentUpdate"') + 'url="'.length;
+    assert.equal(
+      definitionAt(nested, nestedOffset, findPath, index)?.[0].uri,
+      fsPathToUri(path.join(partyDir, 'Find', 'RequestCommentUpdate.xml')),
+    );
+    const item = '<screen><link url="OnlyItem"/></screen>';
+    const itemOffset = at(item, 'url="OnlyItem"') + 'url="'.length;
+    assert.equal(definitionAt(item, itemOffset, findPath, index)?.[0].uri, fsPathToUri(detailPath));
+
+    const relative = '<screen><link url="../Detail"/></screen>';
+    const relativeOffset = at(relative, 'url="../Detail"') + 'url="'.length;
+    assert.equal(definitionAt(relative, relativeOffset, findPath, index)?.[0].uri, fsPathToUri(detailPath));
+
+    const extendLink = '<screen-extend><link url="extraSave"/></screen-extend>';
+    const extendOffset = at(extendLink, 'url="extraSave"') + 'url="'.length;
+    assert.equal(definitionAt(extendLink, extendOffset, extendPath, index)?.[0].uri, fsPathToUri(extendPath));
+
+    const text = [
+      '<screen>',
+      '  <transition name="save"/>',
+      '  <link url="missingName"/>',
+      '  <link url="missingName?x=1"/>',
+      '  <link url="MissingScreen"/>',
+      '  <link url="Detail"/>',
+      '  <link url="${name}"/>',
+      '  <link url="edit${name}"/>',
+      '  <link url="../${name}"/>',
+      '  <link url="actions"/>',
+      '  <link url="nope" url-type="plain"/>',
+      '</screen>',
+    ].join('\n');
+    const diagnostics = collectDiagnostics(text, findPath, index, messages);
+    assert.deepEqual(
+      diagnostics.map((item) => item.message).sort(),
+      [
+        'dynamic url ${name}',
+        'dynamic url ../${name}',
+        'dynamic url edit${name}',
+        'missing screen Detail',
+        'missing screen MissingScreen',
+        'missing transition missingName',
+        'missing transition missingName',
+      ].sort(),
+    );
+    const dynamic = diagnostics.filter((item) => item.message.startsWith('dynamic url'));
+    assert.ok(dynamic.every((item) => item.severity === DiagnosticSeverity.Warning));
+    const queryToken = rangeOf(text, 'missingName?x=1');
+    const queriedName = diagnostics.find(
+      (item) => item.message === 'missing transition missingName' && item.range.start.line === queryToken.start.line,
+    );
+    assert.equal(queriedName?.range.start.character, queryToken.start.character);
+    assert.equal(
+      queriedName && queriedName.range.end.character - queriedName.range.start.character,
+      'missingName'.length,
+    );
+    const expression = at(text, 'url="${name}"') + 'url="'.length;
+    assert.equal(definitionAt(text, expression, findPath, index), null);
+    assert.equal(hoverAt(text, expression, findPath, index, messages), null);
+    assert.equal(completionAt(text, expression, index, findPath), null);
+    assert.deepEqual(collectDiagnostics('<widget-templates><link url="nope"/></widget-templates>', widgetPath, index, messages), []);
+
+    const renamedText = '<screen><transition name="save"/><link url="save"/><link url="save?x=1"/></screen>';
+    index.replaceFile(fsPathToUri(findPath), findPath, renamedText);
+    const renamed = renameAt(renamedText, at(renamedText, 'name="save"') + 'name="'.length, findPath, index, 'store', {
+      messages,
+      fileRename: true,
+      documentChanges: true,
+    });
+    assert.ok(renamed && !('message' in renamed));
+    const editsInFile = ((renamed as WorkspaceEdit).documentChanges ?? [])
+      .filter((change): change is TextDocumentEdit => TextDocumentEdit.is(change))
+      .flatMap((change) => change.edits);
+    assert.deepEqual(editsInFile.map((edit) => edit.newText).sort(), ['store', 'store', 'store']);
+    const queryEdit = editsInFile.find((edit) => edit.range.start.line === rangeOf(renamedText, 'save?x=1').start.line);
+    assert.ok(queryEdit);
+    assert.equal(queryEdit.range.end.character - queryEdit.range.start.character, 'save'.length);
   });
 });

@@ -200,28 +200,39 @@ function crudHover(crudCall: string, records: SymbolRecord[], index: WorkspaceIn
   const lines = [title];
   const multiple = records.length > 1;
   for (const record of records) {
-    const fields = index.entityShape(record).fields;
+    const shape = index.entityShape(record);
     lines.push('');
     if (multiple) {
       lines.push(formatMessage(messages, hoverKey(record), record.name), '');
     }
-    lines.push(formatMessage(messages, 'hoverFields'), ...fieldTable(fields, messages));
+    if (shape.description) {
+      lines.push(shape.description, '');
+    }
+    lines.push(formatMessage(messages, 'hoverFields'), ...fieldTable(shape.fields, messages));
   }
   return lines.join('\n');
 }
 
 function serviceHover(title: string, face: ServiceInterface, messages: Messages): string {
-  return [
-    title,
+  const lines = [title];
+  if (face.description) {
+    lines.push('', face.description);
+  }
+  lines.push(
     '',
     ...section(formatMessage(messages, 'hoverInParameters'), parameterLines(face.inputs, messages, 0), messages),
     '',
     ...section(formatMessage(messages, 'hoverOutParameters'), parameterLines(face.outputs, messages, 0), messages),
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 function entityHover(title: string, shape: EntityShape, messages: Messages): string {
-  const lines = [title, '', formatMessage(messages, 'hoverFields'), ...fieldTable(shape.fields, messages)];
+  const lines = [title];
+  if (shape.description) {
+    lines.push('', shape.description);
+  }
+  lines.push('', formatMessage(messages, 'hoverFields'), ...fieldTable(shape.fields, messages));
   if (shape.relationships.length > 0) {
     lines.push(
       '',
@@ -298,7 +309,8 @@ function parameterLines(parameters: InterfaceParameter[], messages: Messages, de
   for (const parameter of parameters) {
     const label = parameter.type ? `${parameter.name}: ${parameter.type}` : parameter.name;
     const required = parameter.required ? ` ${formatMessage(messages, 'hoverRequired')}` : '';
-    lines.push(`${indent}- ${label}${required}`);
+    const description = parameter.description ? ` — ${singleLine(parameter.description)}` : '';
+    lines.push(`${indent}- ${label}${required}${description}`);
     lines.push(...parameterLines(parameter.children, messages, depth + 1));
   }
   return lines;
@@ -312,11 +324,13 @@ function fieldTable(fields: FieldDef[], messages: Messages): string[] {
     formatMessage(messages, 'hoverColumnName'),
     formatMessage(messages, 'hoverColumnType'),
     formatMessage(messages, 'hoverPk'),
+    formatMessage(messages, 'hoverColumnDescription'),
   ];
   const rows = fields.map((field) => [
     singleLine(field.name),
     singleLine(field.type),
     field.isPk ? formatMessage(messages, 'hoverYes') : '',
+    singleLine(field.description ?? ''),
   ]);
   const widths = header.map((label, column) =>
     Math.max(displayWidth(label), ...rows.map((row) => displayWidth(row[column]))),

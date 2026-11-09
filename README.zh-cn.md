@@ -18,7 +18,7 @@ Moqui Framework 3 的 XML 辅助扩展。同一份安装包运行在 VS Code、C
 
 ## 涵盖的能力
 
-- 结构：随扩展分发的 Moqui 3 schema，覆盖 `entities`、`services`、`secas`、`eecas`、`emecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。
+- 结构：随扩展分发的 Moqui 3 schema，覆盖 `entities`、`services`、`secas`、`eecas`、`emecas`、`gitecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。
 - 跨文件名字：实体、服务、screen location 的补全、跳转、悬停、查找引用、重命名、引用次数和未解析诊断。
 - 文件内部名字：screen 的 transition、section、form、subscreens item；实体字段、relationship、view-entity 的 alias；服务 include、接口和入参。
 - widget-template include、`load-data`、`link` 的 url 等文件路径。`#` 后面指向 section 或 form 的片段会校验。
@@ -30,7 +30,7 @@ Moqui Framework 3 的 XML 辅助扩展。同一份安装包运行在 VS Code、C
 
 ## 结构补全与诊断
 
-本扩展把 `http://moqui.org/xsd/*-3.xsd` 通过 `schemas/catalog.xml` 指到同目录的 XSD。文件根上有 `xsi:noNamespaceSchemaLocation` 时，由 catalog 解析。没有该属性时，按根标签关联对应 schema：`entities`、`services`、`secas`、`eecas`、`emecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。
+本扩展把 `http://moqui.org/xsd/*-3.xsd` 通过 `schemas/catalog.xml` 指到同目录的 XSD。文件根上有 `xsi:noNamespaceSchemaLocation` 时，由 catalog 解析。没有该属性时，按根标签关联对应 schema：`entities`、`services`、`secas`、`eecas`、`emecas`、`gitecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。
 
 ## 跨文件名字
 
@@ -67,6 +67,7 @@ Moqui Framework 3 的 XML 辅助扩展。同一份安装包运行在 VS Code、C
 | `secas` | Se | 服务 ECA |
 | `eecas` | Ee | 实体 ECA |
 | `emecas` | Em | 邮件 ECA |
+| `gitecas` | Ge | Git ECA |
 | `screen` | Sc | Screen |
 | `screen-extend` | Sx | Screen 扩展 |
 | `moqui-conf` | Cf | Moqui 配置 |

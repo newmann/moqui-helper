@@ -26,16 +26,6 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:enumeration value="find-display"/>
         <xs:enumeration value="hidden"/>
     </xs:restriction></xs:simpleType>
-    <!--            added by hxs-->
-<!--    <xs:simpleType name="value-format-style">-->
-<!--        <xs:restriction base="xs:token">-->
-<!--            <xs:enumeration value="yyyy-MM-dd"/>-->
-<!--            <xs:enumeration value="yyyy-MM-dd HH:ss"/>-->
-<!--            <xs:enumeration value="0.00"/>-->
-<!--            <xs:enumeration value="0.000"/>-->
-<!--            <xs:enumeration value="#,##0.00"/>-->
-<!--        </xs:restriction>-->
-<!--    </xs:simpleType>-->
 
     <xs:element name="parameter"><xs:complexType>
         <xs:attribute name="name" type="xs:string" use="required"/>
@@ -52,12 +42,10 @@ along with this software (see the LICENSE.md file). If not, see
     </xs:complexType></xs:element>
     <xs:element name="widget-template"><xs:complexType>
         <xs:sequence>
-<!--            modified by hxs-->
-            <xs:choice minOccurs="0">
+            <xs:choice>
                 <xs:element minOccurs="0" ref="SubFields"/>
                 <xs:element minOccurs="0" ref="AllWidgets"/>
             </xs:choice>
-<!--            modified end by hxs-->
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="StandaloneFields"/>
         </xs:sequence>
         <xs:attribute name="name" type="xs:string" use="required"/>
@@ -114,6 +102,17 @@ along with this software (see the LICENSE.md file). If not, see
                 definition will be built up each time it is used instead of only when first referred to. This is
                 necessary when auto-fields-* elements have ${} string expansion for service or entity names.</xs:documentation></xs:annotation>
         </xs:attribute>
+        <xs:attribute name="db-form-as-of" type="xs:string">
+            <xs:annotation><xs:documentation>For a form that extends a dated DbForm (extends="DbForm#formId"), or that a DbForm
+                modifies for a user group: an expression for the date its fields, options and dependencies are read as of (a
+                Timestamp, date-time text or epoch millis). Empty, or an expression that gives nothing, is now. It is on the form
+                and not read from the context, so a request parameter cannot move the date. See docs/ui/Db-Forms.md.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="db-form-include-drafts" type="xs:string">
+            <xs:annotation><xs:documentation>For a form that extends a dated DbForm: an expression, true (or "true" or "Y") to
+                include the DbForm's drafts (rows with no fromDate), as a preview does. Empty is false: a form shows no drafts
+                unless its screen asks for them here.</xs:documentation></xs:annotation>
+        </xs:attribute>
 
         <xs:attribute name="background-submit" type="boolean" default="false">
             <xs:annotation><xs:documentation>Submit the form in the background without reloading the screen.</xs:documentation></xs:annotation>
@@ -159,7 +158,7 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:element minOccurs="0" ref="entity-find"/>
             <xs:element minOccurs="0" ref="row-actions"/>
             <xs:element minOccurs="0" name="row-selection"><xs:complexType>
-                <xs:annotation><xs:documentation>Configuration for selected row action forms. NOTE: currently only supported in 'qvt' render mode</xs:documentation></xs:annotation>
+                <xs:annotation><xs:documentation>Configuration for selected row action forms. NOTE: supported in the 'qvt' and 'tui' render modes; html and the text modes write the list without it</xs:documentation></xs:annotation>
                 <xs:sequence>
                     <xs:element name="action" maxOccurs="unbounded"><xs:complexType>
                         <xs:sequence>
@@ -189,6 +188,15 @@ along with this software (see the LICENSE.md file). If not, see
                     <xs:annotation><xs:documentation>If specified use instead of the id-field value for the parameter name</xs:documentation></xs:annotation></xs:attribute>
                 <xs:attribute name="list-mode" type="boolean" default="false">
                     <xs:annotation><xs:documentation>If true pass values as a comma-separated list in a single parameter instead of a list of parameters with underscore suffixes, also does not set _isMulti=true parameter</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="condition" type="xs:string">
+                    <xs:annotation><xs:documentation>A boolean expression evaluated when the list renders, with the screen's
+                        context (not a row's), as a section's condition is. When it is false the list is written as if it had
+                        no row-selection: no checkbox column, no select-all, no row actions menu and none of the actions' forms
+                        or dialogs (qvt and tui). A condition that fails to evaluate is logged and counts as false. In a
+                        server-static qvt screen the template evaluates it in the browser over the screen's scope, as a
+                        section's condition there. Only what is shown: each action's transition must still refuse a user
+                        who may not use it. For example condition="!isClientContact" to offer the bulk actions to staff
+                        only.</xs:documentation></xs:annotation></xs:attribute>
             </xs:complexType></xs:element>
 
             <xs:element minOccurs="0" name="hidden-parameters"><xs:complexType>
@@ -228,6 +236,161 @@ along with this software (see the LICENSE.md file). If not, see
                     If type not specified used as a default for any _uiType value not specified in another columns elements.
                     Initially 'desktop' and 'mobile' are supported.
                     Corresponds to FormConfig.configTypeEnumId for per-user and other saved form configurations.
+                </xs:documentation></xs:annotation></xs:attribute>
+            </xs:complexType></xs:element>
+            <xs:element name="view-board" minOccurs="0"><xs:annotation><xs:documentation>
+                The list's rows as cards in columns by a field (IronStone style-guide §3.6, §8.2): a column for each value of
+                group-field, with its count (and the sum of sum-field) in its header; a card shows the title field's cell (its
+                link opens the record), a badge and two to four fields. The columns follow the status flow when group-field is
+                a status (statusId or a name ending in StatusId, or status-type-id given: every status of the type in sequence
+                order, with its label and color), else column-order, else the values in the order of the rows. A card dragged
+                to another column posts transition with the row's key fields and the new value; a refused move goes back with
+                the answer's message. The board is a view of the list (form-list views): the same rows, so its filters, sort,
+                saved finds and page apply, and the list's page size. In qvt the cards are the fields' cells as the list
+                writes them (m-list-views); html shows the list.
+            </xs:documentation></xs:annotation><xs:complexType>
+                <xs:attribute name="group-field" type="xs:string"><xs:annotation><xs:documentation>The field
+                    whose value is a card's column, usually the status. Required unless group-fields is given.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="group-fields" type="xs:string"><xs:annotation><xs:documentation>A comma list of the
+                    fields the board may group by, the first the default (group-field, when given, is the default and need
+                    not be in the list): a Group by choice in the board's bar, kept for the tab. A move posts the field's name
+                    as groupField and the new value under the field's name (parameter-name for group-field). column-order and
+                    status-type-id apply to the default field; a status field (statusId or a name ending in StatusId) has its
+                    statuses as columns and its flow's hints, another field the values of the rows.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="card-title-field" type="xs:string"><xs:annotation><xs:documentation>The field whose cell is
+                    the title of a card; a click on the card follows its link. Defaults to the first field of the list.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="card-fields" type="xs:string"><xs:annotation><xs:documentation>A comma list of two to four
+                    fields shown under the title with their titles.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="badge-field" type="xs:string"><xs:annotation><xs:documentation>A field shown as a tinted
+                    badge by the title.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="sum-field" type="xs:string"><xs:annotation><xs:documentation>A number field summed in each
+                    column's header.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="sum-format" type="xs:string"><xs:annotation><xs:documentation>The number pattern of the sum,
+                    #,##0.## by default.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="transition" type="xs:string"><xs:annotation><xs:documentation>The transition a move posts:
+                    the key fields, the transition's parameters and the list's hidden-parameters, and the new value as
+                    parameter-name. Without it the cards do not move.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="move-condition" type="xs:string"><xs:annotation><xs:documentation>A boolean expression
+                    evaluated when the list renders, with the screen's context: when it is false the board is written as
+                    one without transition, so the cards do not move (qvt and tui). A condition that fails to evaluate is
+                    logged and counts as false. In a server-static qvt screen the template evaluates it in the browser over
+                    the screen's scope. Only what is shown: the transition must still refuse a user who may not move a
+                    card. For example move-condition="!isClientContact".</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="parameter-name" type="xs:string"><xs:annotation><xs:documentation>The name the new value is
+                    posted as; group-field by default.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="key-fields" type="xs:string"><xs:annotation><xs:documentation>A comma list of the fields that
+                    identify a row; by default the fields whose widget is hidden, else the row-selection id-field.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="column-order" type="xs:string"><xs:annotation><xs:documentation>A comma list (or a ${}
+                    expression of a list) of the column values in order; each is a column even with no card. A status or an
+                    enumeration takes its description as the column label.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="status-type-id" type="xs:string"><xs:annotation><xs:documentation>The status type whose
+                    statuses are the columns, when the rows may not show every status.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="status-flow-id" type="xs:string"><xs:annotation><xs:documentation>The status flow whose
+                    transitions tell a dragged card where it may go (the columns outlined and dimmed); Default when not given.
+                    Only the hints: the transition still decides, by the record's own flow.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="all-rows" type="xs:boolean" default="false"><xs:annotation><xs:documentation>The board
+                    shows every row of the find, not the list's page: while it shows, it asks the screen's form request (the
+                    actions transition, /actions/{form name}) for the list's find with its filters and no paging
+                    (pageNoLimit), as view-calendar range-find does, and shows its first max-rows rows. The list and the calendar keep the list's page. A row that is
+                    not on the list's page shows the title and the card slot without the list's cells.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="max-rows" type="xs:positiveInteger" default="500"><xs:annotation><xs:documentation>The
+                    most rows all-rows shows. They are cut in the browser: a pageSize in the request would be kept as the
+                    user's page size.</xs:documentation></xs:annotation></xs:attribute>
+            </xs:complexType></xs:element>
+            <xs:element name="view-calendar" minOccurs="0"><xs:annotation><xs:documentation>
+                The list's rows on a calendar (IronStone style-guide §3.7, §8.2): month, week, day and list (agenda) modes over
+                each row's start-field (and end-field), titled by title-field and colored by color-field (a status by the
+                status color map, else color-map, else a brand color by the value). A drag moves an event and its lower edge
+                resizes it, posting transition with the key fields and the new start and end (epoch millis for a time stamp, a
+                date for a date). A click on empty time opens the quick create: create-screen in a dialog with the start and
+                end as parameters, else a form that posts create-transition with the title, start and end. With resource-field
+                the day mode has a column for each resource, and a move to another column posts the new resource. The same
+                rows as the list: its filters, saved finds and page select what is shown. In qvt an m-list-views; html shows
+                the list.
+            </xs:documentation></xs:annotation><xs:complexType>
+                <xs:attribute name="start-field" type="xs:string" use="required"/>
+                <xs:attribute name="end-field" type="xs:string"><xs:annotation><xs:documentation>Without it a timed event is an
+                    hour long and an all-day event one day.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="title-field" type="xs:string"><xs:annotation><xs:documentation>The field whose text titles an
+                    event; the view-board's card-title-field, else the first field, by default.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="color-field" type="xs:string"/>
+                <xs:attribute name="color-map" type="xs:string"><xs:annotation><xs:documentation>Colors by value of color-field,
+                    as value:color pairs in a comma list (EXT_MADE_UP:info,EXT_REAL_WORLD:positive); the brand color names of
+                    style-guide §5.1.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="all-day-field" type="xs:string"><xs:annotation><xs:documentation>A Y/N field: Y is an
+                    all-day event (a date start is one too).</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="resource-field" type="xs:string"><xs:annotation><xs:documentation>The room, equipment or
+                    person of an event: the day mode has a column for each.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="transition" type="xs:string"><xs:annotation><xs:documentation>The transition a move or resize
+                    posts; without it events do not move.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="create-transition" type="xs:string"><xs:annotation><xs:documentation>The transition the quick
+                    create form posts (title-field, start-field, end-field, all-day-field and resource-field).</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="create-screen" type="xs:string"><xs:annotation><xs:documentation>A screen (a path or
+                    transition of this one) loaded in the quick create dialog, with the start and end (yyyy-MM-dd HH:mm) and
+                    resource as parameters.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="key-fields" type="xs:string"><xs:annotation><xs:documentation>As view-board key-fields.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="modes" type="xs:string" default="month,week,day,list"><xs:annotation><xs:documentation>The
+                    modes offered, the first shown first; on a phone day and list.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="card-fields" type="xs:string"><xs:annotation><xs:documentation>The fields of the card an event
+                    shows when clicked; the view-board's card-fields by default.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="range-find" type="xs:boolean" default="false"><xs:annotation><xs:documentation>The calendar
+                    shows the rows of the dates it shows, not the list's page: as its dates change it asks the screen's form
+                    request (the actions transition, /actions/{form name}) for the list's find with the start-field and
+                    end-field range added ({field}_from and {field}_thru, which search-form-inputs reads) and no paging
+                    (pageNoLimit), with the list's other parameters (its filters). A list prepared by the screen's actions
+                    that reads none of these shows what it gives. The list and the board keep the list's page. A row that is
+                    not on the list's page shows the title and the card slot without the list's cells.</xs:documentation></xs:annotation></xs:attribute>
+            </xs:complexType></xs:element>
+            <xs:element name="view-tree" minOccurs="0"><xs:annotation><xs:documentation>
+                The list's rows as a tree under their parents (IronStone style-guide §3.15, §8.2), in the list's columns: the
+                first column indented a level at a time with a chevron to open and close a row, its children fetched when it
+                opens (children-transition, with the list's find and the row's key as parent-field), the roll-up fields of a
+                row in columns of their own at the right and a totals row of the top-level rows. A row of the list's page
+                whose parent is not on the page is placed under it: ancestor-transition answers the parents the find left
+                out, shown muted. The branches that hold a row of the page start open; Expand to level 1, 2, 3 or all is in
+                the bar (the level in the URL as treeLevel), and the open rows are kept for the tab. With transition a row
+                is dragged onto the upper or lower edge of another to go before or after it, or onto its middle to go under
+                it as the last child, and Tab and Shift+Tab indent it under the sibling above or outdent it to its
+                grandparent (Alt+Up and Alt+Down move it among its siblings); each posts the key fields, parent-field (the
+                new parent, empty at the top) and previousSiblingId (empty for the first), and the list loads again. A row
+                of the page has the list's cells, its in-place edits and links; a row fetched later has the text of its
+                fields (an m-static-form-list gives it its row template). The keys are the treegrid's: Up and Down, Right to
+                open or to the first child, Left to close or to the parent, Home, End, Enter the row's first link. In html
+                the page's rows as a nested table when the tree is the view chosen; in tui an indented outline with + and -
+                markers.
+            </xs:documentation></xs:annotation><xs:complexType>
+                <xs:attribute name="parent-field" type="xs:string" use="required"><xs:annotation><xs:documentation>The field
+                    with the key of a row's parent; empty for a top-level row.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="children-transition" type="xs:string"><xs:annotation><xs:documentation>The transition
+                    that answers one level: asked (GET) with the list's find (the screen's parameters without paging), the
+                    parent's key as parent-field, and no paging (pageNoLimit; 200 rows are shown, then a Show more row for the
+                    next 200); its answer a list of rows, or an object holding one (the form-list's list first). The screen's
+                    form request (/actions/{form name}) by default, whose search-form-inputs reads parent-field as a find.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="ancestor-transition" type="xs:string"><xs:annotation><xs:documentation>The transition
+                    that answers the rows of the keys in ids (a comma list), as children-transition does: the parents of the
+                    page's rows that are not on it. Asked again for the parents its answer leaves out, so it may answer only
+                    the parents or each one's chain to the top. Without it a row whose parent is not on the page is a
+                    top-level row.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="rollup-fields" type="xs:string"><xs:annotation><xs:documentation>A comma list of the
+                    fields with a row's branch totals, computed by the list's actions and the transitions (never summed in the
+                    browser): a column each at the right, headed by the field's title (Total and its name when it is no field
+                    of the form), muted for a row with no children. Not columns of the tree's own part of the row.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="child-count-field" type="xs:string"><xs:annotation><xs:documentation>The field with a
+                    row's number of children: a row with none has no chevron. Without it each row has a chevron until it has
+                    been opened and has none.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="transition" type="xs:string"><xs:annotation><xs:documentation>The transition a move posts:
+                    the key fields, the transition's parameters and the list's hidden-parameters, parent-field and
+                    previousSiblingId. Without it rows do not move.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="move-condition" type="xs:string"><xs:annotation><xs:documentation>As view-board
+                    move-condition: when it is false the tree is written as one without transition, so rows are not
+                    dragged, indented or outdented (the terminal's tree has no moves).</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="key-fields" type="xs:string"><xs:annotation><xs:documentation>As view-board key-fields;
+                    the first is the key that parent-field holds.</xs:documentation></xs:annotation></xs:attribute>
+                <xs:attribute name="confirm-move" type="boolean" default="false"><xs:annotation><xs:documentation>
+                    In qvt, ask for confirmation before a drag or keyboard move, showing the row and its old/new parent
+                    labels. The default preserves existing trees. HTML is read only; terminal applications can provide
+                    an explicit Move form for the same transition. The first key-field may be an occurrence ID, with the
+                    record and original edge fields following it so a multi-parent graph move names one dated edge.
                 </xs:documentation></xs:annotation></xs:attribute>
             </xs:complexType></xs:element>
 
@@ -335,6 +498,34 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:annotation><xs:documentation>If true then this form will be considered dynamic and the internal
                 definition will be built up each time it is used instead of only when first referred to.</xs:documentation></xs:annotation>
         </xs:attribute>
+        <xs:attribute name="db-form-as-of" type="xs:string">
+            <xs:annotation><xs:documentation>For a form that extends a dated DbForm (extends="DbForm#formId"), or that a DbForm
+                modifies for a user group: an expression for the date its fields, options and dependencies are read as of (a
+                Timestamp, date-time text or epoch millis). Empty, or an expression that gives nothing, is now. It is on the form
+                and not read from the context, so a request parameter cannot move the date. See docs/ui/Db-Forms.md.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="db-form-include-drafts" type="xs:string">
+            <xs:annotation><xs:documentation>For a form that extends a dated DbForm: an expression, true (or "true" or "Y") to
+                include the DbForm's drafts (rows with no fromDate), as a preview does. Empty is false: a form shows no drafts
+                unless its screen asks for them here.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="views" type="xs:string">
+            <xs:annotation><xs:documentation>The views of the list the user may switch between (IronStone style-guide §8.2), a comma
+                list of list, board, calendar and tree, the first shown first: board needs a view-board element, calendar a
+                view-calendar and tree a view-tree. A view is a client switch over the same rows, so the filters, sort, saved finds
+                and page apply to each.
+                The switch is above the list; the choice is kept as the user's LIST_VIEW_ preference for the form, and a view
+                parameter in the URL picks one. Without it, list and the view elements there are.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="peek-url" type="xs:string">
+            <xs:annotation><xs:documentation>A Peek pane (IronStone style-guide §3.8): the transition or screen of a row's
+                detail, loaded with the row's first key field (view-board key-fields, else the hidden fields, else the
+                row-selection id-field) and peek=true, so the screen can render compact. A Peek toggle beside the view switch,
+                kept per user (the LIST_PEEK_ preference), puts the list beside a pane on the right (a container-split, 55% of
+                the width at first, resizable); a click on a row, a card or a tree row (not on a control of it) opens it
+                there, Up and Down open the previous and next row, Escape closes the pane. The selected key is in the URL as
+                peekId. Off below 1280 px, where a row opens as it does without it.</xs:documentation></xs:annotation>
+        </xs:attribute>
         <xs:attribute name="server-static" type="xs:string">
             <xs:annotation><xs:documentation>See details for the screen.@server-static attribute. Defaults to the screen's value.</xs:documentation></xs:annotation>
         </xs:attribute>
@@ -426,10 +617,11 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="box" type="boolean" default="false"/>
     </xs:complexType></xs:element>
     <xs:element name="field-row"><xs:annotation>
-        <xs:documentation>Fields in the field-row will be split into two columns. If you want more than
-            two fields in a row, use field-row-big.</xs:documentation>
+        <xs:documentation>Fields in the field-row sit side by side in equal columns from 600px up (two fields in halves,
+            three in thirds, four in quarters) and stack below that. For fields that should flow on one line at their own
+            width, such as a row of buttons, use field-row-big.</xs:documentation>
     </xs:annotation><xs:complexType>
-        <xs:sequence><xs:element minOccurs="0" maxOccurs="2" ref="field-ref"/></xs:sequence>
+        <xs:sequence><xs:element minOccurs="0" maxOccurs="4" ref="field-ref"/></xs:sequence>
     </xs:complexType></xs:element>
     <xs:element name="field-row-big"><xs:annotation>
         <xs:documentation>All fields go in a single column, with an optional title column first. Fields
@@ -489,7 +681,8 @@ along with this software (see the LICENSE.md file). If not, see
             </xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="icon" type="xs:string"><xs:annotation>
-            <xs:documentation>Icon name, actually an icon style used in an 'i' element in HTML output.</xs:documentation></xs:annotation></xs:attribute>
+            <xs:documentation>An icon before the text: a Material Icons name (add, edit, open_in_new) or, with a space or an fa prefix
+                (fa fa-plus), CSS classes for an 'i' element.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="badge" type="xs:string"><xs:annotation>
             <xs:documentation>Text to put in a badge on the right side</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="tooltip" type="xs:string"/>
@@ -510,10 +703,28 @@ along with this software (see the LICENSE.md file). If not, see
                 default-response points to instead of a URL to this transition.</xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="style" type="xs:string"/>
-        <xs:attribute name="btn-type" type="color-context" default="primary"/>
+        <xs:attribute name="btn-type" type="color-context" default="primary"><xs:annotation><xs:documentation>
+            The color of a button link. Without this attribute the button is the tonal (soft tinted) secondary kind; with
+            success, info, warning or danger it is tonal in that color; with primary written explicitly it is the filled
+            primary button, for the one main action of a title row. A text link (link-type anchor, or a screen link in a
+            form-list cell) and a hidden-form-link (flat) keep their kind and take only the color.
+        </xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="dynamic-load-id" type="xs:string"><xs:annotation><xs:documentation>
             If specified URL will be loaded into the dynamic-container with this ID.
         </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="background-submit" type="boolean" default="false"><xs:annotation><xs:documentation>
+            For a link that posts through a hidden form (link-type hidden-form or hidden-form-link, or auto for a transition
+            with actions), as the form-single attribute: post in the background without reloading the screen. The qvt client
+            always posts such a form in the background; in html it is this or any of the three below.
+        </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="background-reload-id" type="xs:string"><xs:annotation><xs:documentation>
+            For a link that posts through a hidden form: after the post reload the dynamic-container with this id.
+        </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="background-hide-id" type="xs:string"><xs:annotation><xs:documentation>
+            For a link that posts through a hidden form: after the post hide the dialog (a container-dialog or dynamic-dialog)
+            with this id.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="background-message" type="xs:string"><xs:annotation><xs:documentation>
+            For a link that posts through a hidden form: after the post show this message.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>
             If specified and evaluates to false link is not rendered.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="entity-name" type="xs:string"/>
@@ -581,6 +792,9 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:sequence>
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="parameter"/>
             <xs:element minOccurs="0" ref="editable-load"/>
+            <xs:choice minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>The options of a select, as a
+                drop-down's.</xs:documentation></xs:annotation>
+                <xs:element ref="entity-options"/><xs:element ref="list-options"/><xs:element ref="option"/></xs:choice>
         </xs:sequence>
         <xs:attribute name="id" type="xs:string" use="required"/>
         <xs:attribute name="text" type="xs:string" use="required"/>
@@ -593,11 +807,20 @@ along with this software (see the LICENSE.md file). If not, see
             </xs:restriction></xs:simpleType>
         </xs:attribute>
         <xs:attribute name="widget-type" default="textarea">
+            <xs:annotation><xs:documentation>The editor: textarea; text-line; select, whose options are the option,
+                list-options and entity-options elements, or what editable-load answers (a list of value and label, or a map
+                of key to label with the current key under selected); date (yyyy-MM-dd) or date-time (yyyy-MM-dd HH:mm), a
+                date picker.</xs:documentation></xs:annotation>
             <xs:simpleType><xs:restriction base="xs:token">
                 <xs:enumeration value="textarea"/>
+                <xs:enumeration value="text-line"/>
                 <xs:enumeration value="select"/>
+                <xs:enumeration value="date"/>
+                <xs:enumeration value="date-time"/>
             </xs:restriction></xs:simpleType>
         </xs:attribute>
+        <xs:attribute name="value" type="xs:string"><xs:annotation><xs:documentation>The current value of a select (the
+            key of its option) when the text is its label; by default the option whose label is the text.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="encode" type="boolean" default="false">
             <xs:annotation><xs:documentation>
                 If true text will be encoded so that it does not interfere with markup of the target output.
@@ -630,6 +853,13 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="name" type="name-parameter" use="required">
             <xs:annotation><xs:documentation>A unique name for this field. Used for the parameter name, referencing
                 the field in other places, etc.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="after" type="xs:string">
+            <xs:annotation><xs:documentation>For a field a form extension adds (a screen-extend's form-single or
+                form-list, or a form that extends another): the name of the field it goes after. In a form with a
+                field-layout its field-ref goes after that field's, in the same row or group; in a form-list with
+                form-list-column elements it gets a column of its own after the column that holds that field. With
+                no after, or a name the form does not have, it goes last.</xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="from" type="xs:string"><!-- was 'entry-name' -->
             <xs:annotation><xs:documentation>A Groovy expression to get the value of the field from the context; may be a simple
@@ -718,12 +948,10 @@ along with this software (see the LICENSE.md file). If not, see
         </xs:documentation>
     </xs:annotation><xs:complexType>
         <xs:sequence>
-<!--            modified by hxs -->
-            <xs:choice minOccurs="0">
+            <xs:choice>
                 <xs:element minOccurs="0" ref="SubFields"/>
                 <xs:element minOccurs="0" maxOccurs="unbounded" ref="AllWidgets"/>
             </xs:choice>
-<!--            modified end here -->
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="StandaloneFields"/>
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="set"/>
         </xs:sequence>
@@ -752,16 +980,23 @@ along with this software (see the LICENSE.md file). If not, see
     <xs:element name="last-row-field" type="form-list-default-field"/>
     <xs:complexType name="form-list-default-field">
         <xs:sequence>
-<!--            modified by hxs -->
-<!--            <xs:element minOccurs="0" maxOccurs="unbounded" ref="StandaloneFields"/>-->
-            <xs:choice minOccurs="0">
-                <xs:element minOccurs="0" ref="SubFields"/>
-                <xs:element minOccurs="0" maxOccurs="unbounded" ref="AllWidgets"/>
-            </xs:choice>
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="StandaloneFields"/>
+            <!-- StandaloneFields* (SubFields? | AllWidgets*) StandaloneFields*, written so a parser can tell the two
+                StandaloneFields runs apart (Unique Particle Attribution) -->
+            <xs:sequence minOccurs="0">
+                <xs:choice>
+                    <xs:element ref="SubFields"/>
+                    <xs:element maxOccurs="unbounded" ref="AllWidgets"/>
+                </xs:choice>
+                <xs:element minOccurs="0" maxOccurs="unbounded" ref="StandaloneFields"/>
+            </xs:sequence>
             <xs:element minOccurs="0" maxOccurs="unbounded" ref="set"/>
             <xs:element minOccurs="0" ref="visible-when"/>
+            <xs:element minOccurs="0" ref="require-when"/>
         </xs:sequence>
+        <xs:attribute name="required" type="boolean"><xs:annotation><xs:documentation>The field must have a value, as
+            when its validate-service parameter is required (a DbForm field's isRequired writes it); the server checks
+            its own rules again.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="title" type="xs:string">
             <xs:annotation><xs:documentation>The name of this field that will be shown to the user; can use the ${}
                 and map.key (dot) syntax to insert values from the context.</xs:documentation></xs:annotation>
@@ -796,24 +1031,48 @@ along with this software (see the LICENSE.md file). If not, see
         </xs:attribute>
     </xs:extension></xs:complexContent></xs:complexType>
 
+    <xs:attributeGroup name="WhenAttributes">
+        <xs:attribute name="field" type="xs:string" use="required"><xs:annotation><xs:documentation>
+            The name of the field of the same form (usually a drop-down) whose value decides
+        </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="value" type="xs:string"><xs:annotation><xs:documentation>
+            The value the field should match, may be a list of comma-separated values
+        </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="from" type="xs:string"><xs:annotation><xs:documentation>
+            An expression that evaluates to a String or Collection, in place of value
+        </xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="operator" default="equals"><xs:annotation><xs:documentation>
+            equals: the field's value is the value or one of the list (with several values, as a multiple select has,
+            any one of them); not-equals: none of them is; empty: the field has no value; not-empty: it has one (the
+            value is not used for these two). The same rule in every render mode and in
+            org.moqui.impl.ScreenServices.evaluate#DbFormDependencies.
+        </xs:documentation></xs:annotation>
+            <xs:simpleType><xs:restriction base="xs:token">
+                <xs:enumeration value="equals"/>
+                <xs:enumeration value="not-equals"/>
+                <xs:enumeration value="empty"/>
+                <xs:enumeration value="not-empty"/>
+            </xs:restriction></xs:simpleType>
+        </xs:attribute>
+    </xs:attributeGroup>
     <xs:element name="visible-when">
         <xs:annotation><xs:documentation>
             Used to dynamically show or hide a field based on the value of another field (usually a drop-down).
-            If this element is present the field is hidden unless the value of the named field matches
-                the value/from String or is in the value/from Collection.
-            NOTE: currently implemented for qvt only (qapps and other Quasar-Vue Templates)
+            If this element is present the field is hidden unless the value of the named field meets the operator
+            (by default: matches the value/from String or is in the value/from Collection). Implemented in the qvt,
+            html (js/moqui-form-when.js) and tui render modes; the server does not see it, so a rule the server must
+            keep is checked there too (for a DbForm, evaluate#DbFormDependencies).
         </xs:documentation></xs:annotation>
-        <xs:complexType>
-            <xs:attribute name="field" type="xs:string" use="required"><xs:annotation><xs:documentation>
-                The name of the field (usually a drop-down) used to determine if this field should be visible or not
-            </xs:documentation></xs:annotation></xs:attribute>
-            <xs:attribute name="value" type="xs:string"><xs:annotation><xs:documentation>
-                The value the field should match in order for this to be visible, may be a list of comma-separated values
-            </xs:documentation></xs:annotation></xs:attribute>
-            <xs:attribute name="from" type="xs:string"><xs:annotation><xs:documentation>
-                Groovy expression that evaluates to a String or Collection
-            </xs:documentation></xs:annotation></xs:attribute>
-        </xs:complexType>
+        <xs:complexType><xs:attributeGroup ref="WhenAttributes"/></xs:complexType>
+    </xs:element>
+    <xs:element name="require-when">
+        <xs:annotation><xs:documentation>
+            The field is required while the value of the named field meets the operator, as visible-when decides when
+            a field shows; a field hidden by its visible-when is not required. Implemented in the qvt (text-line,
+            password and date-time widgets), html (js/moqui-form-when.js, any widget) and tui render modes; the server
+            checks it again (for a DbForm, evaluate#DbFormDependencies).
+        </xs:documentation></xs:annotation>
+        <xs:complexType><xs:attributeGroup ref="WhenAttributes"/></xs:complexType>
     </xs:element>
 
   <!-- ================== Field Sub-Elements ==================== -->
@@ -912,6 +1171,10 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:annotation><xs:documentation>Specifies the currency uomId (ISO code) used to format the value.
             Will only format as currency if this is specified.</xs:documentation></xs:annotation>
         </xs:attribute>
+        <xs:attribute name="currency-hide-symbol" default="false" type="xs:string">
+            <xs:annotation><xs:documentation>When currency-unit-field has value, defines whether currency symbol will be
+            hidden or displayed normally.</xs:documentation></xs:annotation>
+        </xs:attribute>
         <xs:attribute name="format" type="xs:string">
             <xs:annotation><xs:documentation>Used to format the output of Number/Time/Date/Timestamp/etc objects.
                 With auto-fields-service will inherit from service parameter.</xs:documentation></xs:annotation>
@@ -947,13 +1210,6 @@ along with this software (see the LICENSE.md file). If not, see
             Displayed if no record found.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="style" type="xs:string"/>
         <xs:attribute name="also-hidden" default="true" type="boolean"/>
-        <xs:attribute name="display-type" type="xs:string">
-            <xs:simpleType>
-                <xs:restriction base="xs:token">
-                    <xs:enumeration value="chip"/>
-                </xs:restriction>
-            </xs:simpleType>
-        </xs:attribute>
         <xs:attribute name="encode" default="true" type="boolean"><xs:annotation><xs:documentation>
             If true text will be encoded so that it does not interfere with markup of the target output.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
@@ -1012,6 +1268,11 @@ along with this software (see the LICENSE.md file). If not, see
     <xs:element name="password" substitutionGroup="SubFields"><xs:complexType>
         <xs:attribute name="size" type="xs:positiveInteger" default="30"/>
         <xs:attribute name="maxlength" type="xs:positiveInteger"/>
+        <xs:attribute name="autocomplete" type="xs:string" default="new-password"><xs:annotation><xs:documentation>The
+            autocomplete token of the input. The default, new-password, keeps the browser from filling in the user's own
+            sign-in password (a mail server's app password, an API key, another user's new password); use current-password
+            only where the user types their own password to prove who they are (the old password of a change).
+        </xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
     <xs:element name="radio" substitutionGroup="SubFields"><xs:complexType>
         <xs:choice minOccurs="0" maxOccurs="unbounded">
@@ -1039,7 +1300,9 @@ along with this software (see the LICENSE.md file). If not, see
             If there is a message here it will show in a confirmation box when the button is clicked on.
         </xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="type" type="color-context" default="primary"/>
-        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="icon" type="xs:string"><xs:annotation><xs:documentation>
+            An icon before the text: a Material Icons name (check, arrow_forward) or, with a space or an fa prefix (fa fa-check),
+            CSS classes for an 'i' element.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
     <xs:element name="text-line" substitutionGroup="SubFields"><xs:complexType>
         <xs:sequence>
@@ -1096,6 +1359,72 @@ along with this software (see the LICENSE.md file). If not, see
                 This is named to follow the pattern for parameters used elsewhere.</xs:documentation></xs:annotation>
         </xs:attribute>
     </xs:complexType></xs:element>
+    <xs:element name="scan-input" substitutionGroup="SubFields"><xs:annotation><xs:documentation>
+        A field for a barcode scanner (keyboard wedge: fast keys ending in Enter, or Tab) and for typed codes. The text goes to
+        the resolver service through the scanResolve transition every screen has; the resolver answers the identities the text
+        names. One match fills the field with its id and submits the form (with confirm="true" it waits for Confirm), several
+        open a chooser, and none names the failure and keeps the focus in the field for the next scan.
+
+        The resolver is not protected by the form: it runs for any request that names this form and field, even where a
+        conditional-field or a section's condition leaves the field out of the page, and the parameter and depends-on values
+        it gets are whatever the request sends (the values the screen rendered come back from the client). A resolver checks
+        the user's permission and the facility, task and other context again itself, as any service does.
+
+        The form posts the field's name with the id, name_type with the identityType, name_scanText with the text scanned and
+        the scan-id-field (scanId by default) with a client id made for each scan intent: a transition passes it on as its
+        operation key, so a double scan or a second Confirm answers the first. A repeat of the same text within two seconds of
+        its first scan is the same intent. The scan's fields are emptied after the form's answer, so a later submit carries no
+        scan id. The scan id is chosen by the client: an operation-key lookup on it is scoped to the user (and the operation). A transition reads the GS1 fields again from name_scanText (ec.resource.parseGs1) and does not trust
+        values the client parsed.
+
+        The html mode writes a text input that posts to the same resolver from moqui-html.js (without JavaScript the text posts
+        as name_scanText); the tui mode is a drop-down that searches the resolver (a GET, which scanResolve takes as the read
+        it is; a POST must carry the session token), posting the id and a scanId made when the screen rendered.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="unbounded" ref="parameter">
+                <xs:annotation><xs:documentation>The screen's context passed to the resolver, such as facilityId or the
+                    workEffortId of the task, evaluated when the screen renders and sent back by the client, so client input.
+                    Only the names declared here and in depends-on reach the resolver.</xs:documentation></xs:annotation>
+            </xs:element>
+            <xs:element minOccurs="0" maxOccurs="unbounded" ref="depends-on">
+                <xs:annotation><xs:documentation>A field of the form whose value is passed to the resolver when the scan is
+                    resolved (its parameter name, else the field name).</xs:documentation></xs:annotation>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="resolver" type="xs:string" use="required">
+            <xs:annotation><xs:documentation>The service that resolves a scan. In: scanText, allowedTypes (a List, empty for
+                any), scanId, and the parameter and depends-on names. Out: matches, a List of Maps with identityType, id, label
+                and detail; and parsed, the GS1 fields of the text as ec.resource.parseGs1 answers them (when the resolver
+                answers no parsed, the framework parses the text itself and adds what parses). The service checks the user's
+                permissions and the context itself; the framework keeps only matches of the allowed types.
+            </xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="allowed-types" type="xs:string">
+            <xs:annotation><xs:documentation>Comma separated identity types the field takes, such as
+                asset,location,container,lot,product,shipment. Empty for any type the resolver answers.
+            </xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="scan-id-field" type="xs:string" default="scanId">
+            <xs:annotation><xs:documentation>The name the scan intent's id posts under. Each scan-input of a form needs its
+                own: the scanResolve transition refuses a form whose scan inputs share one, and assembling it logs an error.
+            </xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="auto-submit" type="boolean" default="true">
+            <xs:annotation><xs:documentation>Whether one match (or a choice from the chooser) submits the form. When false the
+                field is filled and the form waits for its own submit.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="confirm" type="boolean" default="false">
+            <xs:annotation><xs:documentation>Explicit confirmation: a match is shown with a Confirm button (Enter confirms)
+                and submits only then.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="placeholder" type="xs:string">
+            <xs:annotation><xs:documentation>The hint in the empty field, localized; Scan or type by default.
+            </xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="size" type="xs:positiveInteger"/>
+        <xs:attribute name="maxlength" type="xs:positiveInteger" default="512"/>
+    </xs:complexType></xs:element>
     <xs:element name="text-area" substitutionGroup="SubFields"><xs:complexType>
         <xs:attribute name="cols" type="xs:positiveInteger" default="60"/>
         <xs:attribute name="rows" type="xs:positiveInteger" default="3"/>
@@ -1104,11 +1433,38 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="read-only" default="false" type="boolean"/>
         <xs:attribute name="editor-type" type="xs:string">
             <xs:annotation><xs:documentation>Use a WYSIWYG editor, can be an expanded string expression (with ${}),
-                such as 'html' or 'md', support depends on what the active text-area macro does.</xs:documentation></xs:annotation>
+                such as 'html' or 'md', support depends on what the active text-area macro does. In qvt: html is the Quasar
+                editor, md a text area with a preview, rich the Tiptap editor (m-rich-text: paragraphs and headings, bold,
+                italic, lists, links, images by URL, tables, code, quotes, mentions, record links, a plain-text toggle) and
+                rich-light its compact form for notes and chat (bold, italic, link, list, code, and mentions and record links
+                when their transitions are set). The rich editors write only HTML that a service
+                parameter with allow-html="safe" keeps, and fall back to the html editor when their library does not load.
+                code is the code editor (m-code-editor, on CodeMirror) in the language attribute's language, a plain text
+                area when its library does not load.
+                In html every editor-type is a plain text area.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="language" type="xs:string">
+            <xs:annotation><xs:documentation>For editor-type code: the language of the text, one of xml, html, vue,
+                javascript, json, css, markdown, sql, yaml or rust; plain text when empty.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="mention-transition" type="xs:string">
+            <xs:annotation><xs:documentation>For editor-type rich or rich-light: the transition (or URL) the @ mentions
+                search. It is asked with the text after the @ as the term parameter and answers a JSON list of {id, label}.
+                A mention is written as &lt;span data-mention-id="id"&gt;@label&lt;/span&gt;.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="record-transition" type="xs:string">
+            <xs:annotation><xs:documentation>For editor-type rich or rich-light: the transition (or URL) the # record links
+                search. It is asked with the text after the # as the term parameter and answers a JSON list of {id, label, entity}
+                (recordId and recordEntityName are read too). A record link is written as
+                &lt;span data-record-entity="entity" data-record-id="id"&gt;#label&lt;/span&gt;. It is not a user mention.</xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="editor-theme" type="xs:string">
             <xs:annotation><xs:documentation>If applicable for the editor-type a screenThemeId for the CSS
                 (resourceTypeEnumId=STRT_STYLESHEET) files to use for the editor context, defaults to active screen theme.</xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="autogrow" default="false" type="boolean">
+            <xs:annotation><xs:documentation>Auto-grow the text area to fit the contents;
+                currently only supported in qvt mode (Vue + Quasar)</xs:documentation></xs:annotation>
         </xs:attribute>
     </xs:complexType></xs:element>
     <xs:element name="text-find" substitutionGroup="SubFields"><xs:complexType>

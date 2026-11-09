@@ -27,8 +27,9 @@ along with this software (see the LICENSE.md file). If not, see
     <xs:group name="widget-elements"><xs:choice>
         <xs:element ref="AllWidgets"/>
         <xs:element ref="StandaloneFields"/>
-        <!-- allow additional elements without validation to facilitate extension by adding only FTL macros -->
-        <xs:any minOccurs="0" maxOccurs="unbounded" processContents="skip"/>
+        <!-- allow additional elements without validation to facilitate extension by adding only template macros; for a
+             validating parser they must be in a namespace of their own (Unique Particle Attribution) -->
+        <xs:any namespace="##other" minOccurs="0" maxOccurs="unbounded" processContents="skip"/>
     </xs:choice></xs:group>
 
     <!-- ================ Screen - root elements ================ -->
@@ -54,8 +55,10 @@ along with this software (see the LICENSE.md file). If not, see
                 <xs:restriction base="xs:token">
                     <xs:enumeration value="url-screen"/>
                     <xs:enumeration value="url-plain"/>
-                    <xs:enumeration value="icon"><xs:annotation><xs:documentation>Icon name, actually an icon
-                        style used in an 'i' element in HTML output.</xs:documentation></xs:annotation></xs:enumeration>
+                    <xs:enumeration value="icon"><xs:annotation><xs:documentation>Icon name. CSS classes when it has a
+                        space or starts with fa- (fa fa-home), used in an 'i' element. Otherwise a Quasar icon name, such
+                        as sym_o_hub (Material Symbols outlined) or home (Material Icons), which the qvt menus show with
+                        q-icon and the html app list with the Material Symbols font.</xs:documentation></xs:annotation></xs:enumeration>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>
@@ -87,8 +90,8 @@ along with this software (see the LICENSE.md file). If not, see
         </xs:attribute>
         <xs:attribute name="screen-theme-type-enum-id" type="xs:string" default="STT_INTERNAL"/>
         <xs:attribute name="track-artifact-hit" type="boolean" default="true">
-            <xs:annotation><xs:documentation>If set to false no ArtifactHit or ArtifactHitBin data will be kept for
-                this screen and for any content or transitions under the screen.</xs:documentation></xs:annotation>
+            <xs:annotation><xs:documentation>If false, suppress artifact spans and metrics for this screen and its
+                descendant content and transitions. The HTTP request root is still retained.</xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="history" type="boolean" default="true">
             <xs:annotation><xs:documentation>If set to false this screen will not be saved in the screen/URL history.</xs:documentation></xs:annotation>
@@ -106,15 +109,25 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:annotation><xs:documentation>
                 The render mode(s) this screen supports. Can be any valid render mode. The default value of "all" will allow all
                 render modes, so specify one or more specific render modes to limit how the screen may be rendered. Default supported
-                modes include: text, html, js, vuet, xsl-fo, xml, and csv. Values can be comma separated to apply to multiple render modes.
+                modes include: text, html, html-print (alias xsl-fo), xml, csv, qvt, qjs, qvue and tui. Values can be comma separated to apply to multiple render modes.
             </xs:documentation></xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="density">
+            <xs:annotation><xs:documentation>
+                The density of the screen and the screens below it in the qvt shell. handheld is for a warehouse or plant
+                handheld or a phone held in one hand (IronStone style guide 8.2): 48 px controls, 18 px text, no app drawer,
+                and a header reduced to the title and the account menu. It wins over the user's comfortable or compact density
+                preference, which applies everywhere else. The html mode puts the same class on its body; the text and tui
+                modes keep the same fields in the same order.
+            </xs:documentation></xs:annotation>
+            <xs:simpleType><xs:restriction base="xs:token"><xs:enumeration value="handheld"/></xs:restriction></xs:simpleType>
         </xs:attribute>
         <xs:attribute name="server-static" type="xs:string">
             <xs:annotation><xs:documentation>
                 The render modes where the results of this screen are always the same and the screen render results may be cached (on server and/or client).
                 This applies to all screens that are designed for client rendering when the screen is written to fully support it (filling in data with additional requests).
                 Placeholder screens are automatically server static, ie with just subscreens-panel, subscreens-active, and subscreens-menu elements.
-                Can be any valid render mode. Default supported modes include: text, html, js, vuet, xsl-fo, xml, and csv.
+                Can be any valid render mode. Default supported modes include: text, html, html-print (alias xsl-fo), xml, csv, qvt, qjs, qvue and tui.
                 Values can be comma separated to apply to multiple render modes. A value of "all" will apply to all render modes.
             </xs:documentation></xs:annotation>
         </xs:attribute>
@@ -148,6 +161,11 @@ along with this software (see the LICENSE.md file). If not, see
                 <xs:element ref="transition-include"/>
             </xs:choice>
             <xs:element ref="subscreens" minOccurs="0"/>
+            <xs:element ref="shell-providers" minOccurs="0"/>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element ref="ext-action"/>
+                <xs:element ref="ext-panel"/>
+            </xs:choice>
             <xs:element ref="pre-actions" minOccurs="0"/>
             <xs:group ref="section-elements"/>
         </xs:sequence>
@@ -158,6 +176,9 @@ along with this software (see the LICENSE.md file). If not, see
             The root element of a file under the 'screen-extend' directory in a component using a path and filename that matches
             the path and filename of the screen to extend. The path can match by the path under the 'screen' directory or by the
             full path following the protocol/scheme of the location URI (ie everything after ://).
+
+            When several components extend one screen their extensions apply in component load order (the depends-on
+            order, then the order the component directories list them), as entity extensions do.
         </xs:documentation>
     </xs:annotation><xs:complexType><xs:complexContent><xs:extension base="screen-base">
         <!-- NOTE: screen element attributes come from screen-base that this is an extension of -->
@@ -169,6 +190,20 @@ along with this software (see the LICENSE.md file). If not, see
                 <xs:element ref="transition-include"/>
             </xs:choice>
             <xs:element ref="subscreens" minOccurs="0"/>
+            <xs:element ref="shell-providers" minOccurs="0"><xs:annotation><xs:documentation>
+                Merged into the screen's shell-providers child by child, by element and key: quick-create by kind,
+                palette-source by group, today-source by service, palette-type by doc-type, notification-topic by topic,
+                keymap by scope (and its keys by keys), palette-action and account-menu-item by screen, response-action by
+                screen and text-parameter, page-action by screen and agent, assist-prompt by screen, entity and text, and
+                the provider hooks (inbox-source and the others) by name. An equal key is replaced where it was; a new one
+                is added at the end. Labels never identify an entry.
+            </xs:documentation></xs:annotation></xs:element>
+            <xs:choice minOccurs="0" maxOccurs="unbounded">
+                <xs:element ref="ext-action"><xs:annotation><xs:documentation>Replaces the screen's ext-action of the
+                    same name, the whole descriptor, or adds one.</xs:documentation></xs:annotation></xs:element>
+                <xs:element ref="ext-panel"><xs:annotation><xs:documentation>Replaces the screen's ext-panel of the
+                    same name, or adds one.</xs:documentation></xs:annotation></xs:element>
+            </xs:choice>
 
             <xs:element name="actions-extend" minOccurs="0" maxOccurs="unbounded"><xs:complexType>
                 <xs:group minOccurs="0" maxOccurs="unbounded" ref="AllOperations"/>
@@ -185,16 +220,23 @@ along with this software (see the LICENSE.md file). If not, see
             </xs:complexType></xs:element>
             <xs:element name="widgets-extend" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>
                 This is a simple, generic way to insert widget elements into various places in existing screens.
-                Add widgets before or after all elements where name here matches the name or id attributes match.
+                Add widgets before or after all elements where name here matches the name or id attributes match, or
+                with prepend or append inside each of them.
             </xs:documentation></xs:annotation><xs:complexType>
                 <xs:group ref="widget-elements" minOccurs="0" maxOccurs="unbounded"/>
                 <xs:attribute name="name" type="xs:string" use="required"><xs:annotation><xs:documentation>
                     Match against name or id attributes on elements in the base screen (being extended).
                 </xs:documentation></xs:annotation></xs:attribute>
                 <xs:attribute name="where" default="before"><xs:simpleType><xs:restriction base="xs:token">
-                    <xs:enumeration value="before"/>
-                    <!-- FUTURE: semantics are more complex, vary by element: <xs:enumeration value="prepend"/><xs:enumeration value="append"/> -->
-                    <xs:enumeration value="after"/>
+                    <xs:enumeration value="before"><xs:annotation><xs:documentation>Before the matched element, in
+                        its parent.</xs:documentation></xs:annotation></xs:enumeration>
+                    <xs:enumeration value="after"><xs:annotation><xs:documentation>After the matched element, in its
+                        parent.</xs:documentation></xs:annotation></xs:enumeration>
+                    <xs:enumeration value="prepend"><xs:annotation><xs:documentation>Inside the matched element, first: in
+                        a section's widgets, a container-box's box-body (or box-body-nopad), else the element itself (a
+                        container, a row-col).</xs:documentation></xs:annotation></xs:enumeration>
+                    <xs:enumeration value="append"><xs:annotation><xs:documentation>Inside the matched element, last, in
+                        the same places as prepend.</xs:documentation></xs:annotation></xs:enumeration>
                 </xs:restriction></xs:simpleType></xs:attribute>
             </xs:complexType></xs:element>
 
@@ -219,7 +261,7 @@ along with this software (see the LICENSE.md file). If not, see
     </xs:annotation><xs:complexType>
         <xs:attribute name="type" type="xs:string" use="required">
             <xs:annotation><xs:documentation>
-                Can be anything. Default supported values include: text, html, xsl-fo, xml, and csv.
+                Can be anything. Default supported values include: text, html, html-print (alias xsl-fo), xml, and csv.
             </xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="location" type="xs:string" use="required"/>
@@ -348,6 +390,24 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="require-session-token" default="true" type="boolean"><xs:annotation><xs:documentation>
             If not false (default true) moquiSessionToken (from ec.web.sessionToken) must be passed to this
             transition for all requests in a session after the first.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="authz-action">
+            <xs:annotation><xs:documentation>
+                Artifact authz action used when running this transition and when checking whether a link to it is
+                permitted. If not specified: a transition-level service-call uses that service's authz-action (or
+                verb); read-only transitions default to view; other transitions with actions default to update;
+                redirect-only transitions default to view. read-only is about insecure URL parameters, not authz —
+                privileged read-only transitions (data export, file manager commands, etc) should set this explicitly.
+            </xs:documentation></xs:annotation>
+            <xs:simpleType>
+                <xs:restriction base="xs:token">
+                    <xs:enumeration value="view"/>
+                    <xs:enumeration value="create"/>
+                    <xs:enumeration value="update"/>
+                    <xs:enumeration value="delete"/>
+                    <xs:enumeration value="all"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
     </xs:complexType></xs:element>
     <xs:element name="path-parameter"><xs:complexType>
         <xs:attribute name="name" type="name-parameter" use="required"/>
@@ -472,6 +532,267 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="method" type="xs:string"/>
     </xs:complexType></xs:element>
 
+    <!-- ================ Shell Providers ================ -->
+    <xs:element name="shell-providers"><xs:annotation><xs:documentation>
+        What an app root screen (a subscreen of the apps root) offers the suite shell of /qapps beyond its menu: quick-create
+        kinds for the + menu, Today panel sources, palette actions, document types and search groups, notification topics,
+        key bindings and account menu items. It renders nothing in any render mode. The shellData transition of the root
+        screen (webroot.xml) gathers the providers of the app roots the user may open, once per page load; shellSearch runs
+        their palette sources. An app root whose providers fail is logged and left out.
+
+        A screen attribute is a path under the apps root, such as Commons/QuickCreate or gallery/Widgets, optionally with a
+        query string; the client gets it as a /qapps link, and an item whose screen the user may not view is left out. Labels
+        are localized when the shell data is made. Each kind of child is in sequence order (none counts as 0, ties keep the
+        order written).
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+            <xs:element ref="quick-create"/>
+            <xs:element ref="today-source"/>
+            <xs:element ref="palette-action"/>
+            <xs:element ref="palette-type"/>
+            <xs:element ref="palette-source"/>
+            <xs:element ref="notification-topic"/>
+            <xs:element ref="keymap"/>
+            <xs:element ref="account-menu-item"/>
+            <xs:element ref="assist-prompt"/>
+            <xs:element ref="response-action"/>
+            <xs:element ref="page-action"/>
+            <xs:element ref="inbox-source"/>
+            <xs:element ref="recipient-source"/>
+            <xs:element ref="record-lookup"/>
+            <xs:element ref="record-link"/>
+            <xs:element ref="create-from"/>
+            <xs:element ref="invitation"/>
+            <xs:element ref="contact-card"/>
+            <xs:element ref="meetings-source"/>
+            <xs:element ref="call-context"/>
+            <xs:element ref="home-source"/>
+            <xs:element ref="external-conversation"/>
+            <xs:element ref="sms-consent"/>
+            <xs:element ref="call-target"/>
+        </xs:choice>
+    </xs:complexType></xs:element>
+    <xs:attributeGroup name="provider-attributes">
+        <xs:attribute name="name" type="xs:string" use="required"><xs:annotation><xs:documentation>Provider-qualified
+            (boss.internal): the sourceId of what it answers, and its key in a screen-extend.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="service" type="xs:string" use="required"><xs:annotation><xs:documentation>The service that
+            answers, implementing the hook's interface. It runs as the app root that declares it, with that app's
+            authorization and entity filters; a userId or app passed as data grants nothing.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="sequence" type="xs:integer"/>
+    </xs:attributeGroup>
+    <xs:complexType name="provider-type">
+        <xs:attributeGroup ref="provider-attributes"/>
+    </xs:complexType>
+    <xs:element name="inbox-source" type="provider-type"><xs:annotation><xs:documentation>
+        Comms providers (plans/Comms-Framework.md §3.3). The framework calls every provider of a hook declared by the app roots
+        the user may open (org.moqui.impl.ShellServices.call#Providers) and combines the answers: a read runs each in its own
+        transaction, and one that fails is logged and listed in failedParts while the others answer; a mutation reports the
+        first failure; with no provider the feature is skipped (unavailable). inbox-source: accounts, settings and pages of
+        threads (the Internal account and mailboxes of IronStone BOSS).
+    </xs:documentation></xs:annotation></xs:element>
+    <xs:element name="recipient-source" type="provider-type"><xs:annotation><xs:documentation>People, groups and lists with
+        addresses for a text (Compose's recipients).</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="record-lookup" type="provider-type"><xs:annotation><xs:documentation>Record cards (entityName, id, title,
+        status, url) for a text or id.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="record-link" type="provider-type"><xs:annotation><xs:documentation>Links a message or chat event to a
+        record.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="create-from" type="provider-type"><xs:annotation><xs:documentation>Creates a record (a task, a request)
+        from a message or chat event; answers the new record's url.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="invitation" type="provider-type"><xs:annotation><xs:documentation>Answers a calendar invitation (an iMIP
+        part).</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="contact-card" type="provider-type"><xs:annotation><xs:documentation>A contact card for an address or
+        number, with an add-to-contacts action.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="meetings-source" type="provider-type"><xs:annotation><xs:documentation>A user's meetings in a range, with
+        their call links.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="call-context" type="provider-type"><xs:annotation><xs:documentation>Who a caller is and their open records
+        (a screen pop).</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="home-source" type="provider-type"><xs:annotation><xs:documentation>Other cards of the Comms Home and their
+        rows.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="external-conversation" type="provider-type"><xs:annotation><xs:documentation>Files a bridged conversation
+        on a record, with an idempotency key.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="sms-consent" type="provider-type"><xs:annotation><xs:documentation>Whether a promotional text may go
+        from one of our numbers to a number (consent: true or false); with no provider saying yes it is
+        refused.</xs:documentation></xs:annotation></xs:element>
+    <xs:element name="call-target" type="provider-type"><xs:annotation><xs:documentation>Which of the users the current
+        user would call, transfer a call to or add to a call are refused (refusedUserIdList), for an app that keeps them to
+        the user's own organizations; with no provider any enabled user may be reached, and a provider that fails refuses
+        them all.</xs:documentation></xs:annotation></xs:element>
+
+    <!-- ================ Declared actions and panels ================ -->
+    <xs:attributeGroup name="ext-item-attributes">
+        <xs:attribute name="name" type="xs:string" use="required"><xs:annotation><xs:documentation>Provider-qualified
+            (boss.createTask): the key a screen-extend replaces it by.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="slot" type="xs:string" use="required"><xs:annotation><xs:documentation>Where the screen shows it: one
+            of the slots the screen's component renders (Comms: message-actions, thread-toolbar, room-header,
+            chat-message-actions, compose-toolbar, call-actions, voicemail-actions; panels: room-panel, contact-card,
+            mailbox-sidebar).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="sequence" type="xs:integer"/>
+        <xs:attribute name="label" type="xs:string"/>
+        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="screen" type="xs:string"><xs:annotation><xs:documentation>A path from this screen (Dialog,
+            ../Other/Page), never a location or URL. Left out for a user who may not view it.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="target" default="dialog"><xs:simpleType><xs:restriction base="xs:token">
+            <xs:enumeration value="dialog"/><xs:enumeration value="page"/>
+        </xs:restriction></xs:simpleType></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>A display test on the item's
+            fields: field, !field, field == 'value' or field != 'value'. Never an authorization rule: the target checks access
+            when called.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="hook" type="xs:string"><xs:annotation><xs:documentation>A provider hook the item needs
+            (create-from, record-link): it is left out for a user no app answers that hook for.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:attributeGroup>
+    <xs:element name="ext-action"><xs:annotation><xs:documentation>
+        An action another app adds to this screen's items (plans/Comms-Framework.md §3.3): a .qvue screen renders the actions of
+        a slot in its menus (m-ext-actions), the terminal client lists them. Exactly one of screen (opened with the mapped
+        parameters, as a dialog or a page) or transition (a transition of this screen, posted with them).
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element name="parameter" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>
+            A parameter of the target and the item field it takes (from; the same name when empty), or a fixed value. Nothing
+            else of the item is passed.</xs:documentation></xs:annotation><xs:complexType>
+            <xs:attribute name="name" type="xs:string" use="required"/>
+            <xs:attribute name="from" type="xs:string"/>
+            <xs:attribute name="value" type="xs:string"/>
+        </xs:complexType></xs:element></xs:sequence>
+        <xs:attributeGroup ref="ext-item-attributes"/>
+        <xs:attribute name="transition" type="xs:string"/>
+        <xs:attribute name="confirm" type="xs:string"/>
+    </xs:complexType></xs:element>
+    <xs:element name="ext-panel"><xs:annotation><xs:documentation>
+        A panel another app adds to a slot of this screen (m-ext-panel): the screen at screen, loaded with the mapped parameters.
+        It decides per item and renders nothing when nothing applies; one that fails shows a named unavailable state and the
+        other panels still render.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element name="parameter" minOccurs="0" maxOccurs="unbounded"><xs:complexType>
+            <xs:attribute name="name" type="xs:string" use="required"/>
+            <xs:attribute name="from" type="xs:string"/>
+        </xs:complexType></xs:element></xs:sequence>
+        <xs:attributeGroup ref="ext-item-attributes"/>
+    </xs:complexType></xs:element>
+    <xs:attributeGroup name="shell-link-attributes">
+        <xs:attribute name="label" type="xs:string" use="required"/>
+        <xs:attribute name="icon" type="xs:string"><xs:annotation><xs:documentation>A Quasar icon name, Material Symbols
+            outlined (sym_o_add_task) or Material Icons, or CSS classes when it has a space.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="sequence" type="xs:integer"/>
+    </xs:attributeGroup>
+    <xs:element name="quick-create"><xs:annotation><xs:documentation>
+        A kind of record the shell's + menu creates in a dialog (m-dynamic-dialog), with the screen context as parameters
+        (recordEntity, recordId). Without a screen it opens the theme's STRT_QUICK_CREATE screen with kind as a parameter;
+        with neither it is left out. The current app's kinds come first in the menu.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element ref="parameter" minOccurs="0" maxOccurs="unbounded"><xs:annotation><xs:documentation>
+            A query parameter added to the screen link: name and value, the value as written.</xs:documentation></xs:annotation></xs:element></xs:sequence>
+        <xs:attribute name="kind" type="xs:string" use="required"/>
+        <xs:attributeGroup ref="shell-link-attributes"/>
+        <xs:attribute name="screen" type="xs:string"/>
+        <xs:attribute name="requires-record" type="boolean" default="false"><xs:annotation><xs:documentation>Offered only
+            while a record is in the screen context (an activity on the record).</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:element name="today-source"><xs:annotation><xs:documentation>
+        A service the Today panel calls for the items this app adds to it (open RFQs for Sales, late shipments for
+        Warehouse). The panel screen names the parameters; the service name goes to the client.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="service" type="xs:string" use="required"/>
+        <xs:attribute name="label" type="xs:string"/>
+    </xs:complexType></xs:element>
+    <xs:element name="palette-action"><xs:annotation><xs:documentation>
+        An entry of the palette's Actions group ("Create sales order", "Receive shipment") that opens a screen.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element ref="parameter" minOccurs="0" maxOccurs="unbounded"/></xs:sequence>
+        <xs:attributeGroup ref="shell-link-attributes"/>
+        <xs:attribute name="screen" type="xs:string" use="required"/>
+    </xs:complexType></xs:element>
+    <xs:element name="palette-type"><xs:annotation><xs:documentation>
+        A search DataDocument type this app's records are found by. Every palette source gets the union of the types of the
+        apps the user may open as docTypes, so a Records source searches only what those apps show.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="doc-type" type="xs:string" use="required"/>
+    </xs:complexType></xs:element>
+    <xs:element name="palette-source"><xs:annotation><xs:documentation>
+        A palette group answered by a service on the server (shellSearch); the service name is never sent to the client,
+        and only the sources of the apps the user may open run. The service gets text, limit (rows wanted, 5 by default),
+        docTypes (a List of the palette-type document types of the apps the user may open) and, for a source with an
+        id-pattern, idMatch=true. It answers rows, a List of Maps with title, subtitle, icon and url (a /qapps link), and
+        optionally moreUrl, the link of a full search for the text. A source that fails is logged by group and service and
+        its group left out; one that answers no rows is left out too.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="group" type="xs:string" use="required"><xs:annotation><xs:documentation>The group name, which a
+            shellSearch request may name in groups to narrow the search (the client maps its prefixes to groups).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="label" type="xs:string"><xs:annotation><xs:documentation>The group's heading; the group name
+            when empty.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="service" type="xs:string" use="required"/>
+        <xs:attribute name="prefix" type="xs:string"><xs:annotation><xs:documentation>A typed prefix that narrows the palette
+            to this group (@ people, # rooms); the palette keeps > for actions and : for screens.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="id-pattern" type="xs:string"><xs:annotation><xs:documentation>A regular expression the whole
+            text must match for this source to run, as for an id lookup.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="sequence" type="xs:integer"><xs:annotation><xs:documentation>The groups of a search are in
+            sequence order across the apps.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:element name="notification-topic"><xs:annotation><xs:documentation>
+        A NotificationMessage topic this app sends to users, for the Notifications panel's filter by app.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="topic" type="xs:string" use="required"/>
+    </xs:complexType></xs:element>
+    <xs:element name="keymap"><xs:annotation><xs:documentation>
+        Key bindings of this app for the shell's keymap registry (moqui.keymap) and its ? overlay.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element name="key" minOccurs="0" maxOccurs="unbounded"><xs:complexType>
+            <xs:attribute name="keys" type="xs:string" use="required"><xs:annotation><xs:documentation>The keys: ctrl+k, or a
+                chord such as g i.</xs:documentation></xs:annotation></xs:attribute>
+            <xs:attribute name="label" type="xs:string"/>
+            <xs:attribute name="screen" type="xs:string"><xs:annotation><xs:documentation>The screen the key opens; a key to
+                a screen the user may not view is left out.</xs:documentation></xs:annotation></xs:attribute>
+            <xs:attribute name="action" type="xs:string"><xs:annotation><xs:documentation>Instead of a screen, the name of a
+                client action of the shell (palette, quickCreate).</xs:documentation></xs:annotation></xs:attribute>
+        </xs:complexType></xs:element></xs:sequence>
+        <xs:attribute name="scope" type="xs:string"><xs:annotation><xs:documentation>The scope the keys are active in; empty
+            is global.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:element name="account-menu-item"><xs:annotation><xs:documentation>
+        An entry of the shell's account menu (Preferences, Account) that opens a screen.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element ref="parameter" minOccurs="0" maxOccurs="unbounded"/></xs:sequence>
+        <xs:attributeGroup ref="shell-link-attributes"/>
+        <xs:attribute name="screen" type="xs:string" use="required"/>
+    </xs:complexType></xs:element>
+    <xs:element name="assist-prompt"><xs:annotation><xs:documentation>
+        A suggested prompt of the Assist drawer (docs/ai/Assist.md GET prompts): a chip on the app's pages, or on screen and
+        the screens below it, for a record of entity when it is set. send="true" sends it at once; otherwise it fills
+        the composer. A prompt whose screen the user may not view is left out.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="label" type="xs:string" use="required"/>
+        <xs:attribute name="text" type="xs:string" use="required"/>
+        <xs:attribute name="send" type="boolean" default="false"/>
+        <xs:attribute name="entity" type="xs:string"/>
+        <xs:attribute name="screen" type="xs:string"/>
+        <xs:attribute name="sequence" type="xs:integer"/>
+    </xs:complexType></xs:element>
+    <xs:element name="response-action"><xs:annotation><xs:documentation>
+        An action on an Assist answer (docs/ai/Assist.md GET prompts): the screen opens in the quick-create frame with the
+        answer's text in text-parameter, and with the page's record (entityName, recordId) when there is one; with
+        requires-record="true" it is offered only when the page has a record ("Send as message", "Log as note").
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="label" type="xs:string" use="required"/>
+        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="screen" type="xs:string" use="required"/>
+        <xs:attribute name="text-parameter" type="xs:string" use="required"/>
+        <xs:attribute name="requires-record" type="boolean" default="false"/>
+        <xs:attribute name="sequence" type="xs:integer"/>
+    </xs:complexType></xs:element>
+
+    <xs:element name="page-action"><xs:annotation><xs:documentation>
+        An action of the Assist drawer's header on every app page of a user who may open this app: it opens the drawer with
+        the agent named, whose suggested prompts for the page follow (the dev-aide's "Customize this screen" on a dev
+        instance, plans/design-dev-aide.md 3.5). A user without the agent is not offered it. With screen instead, it opens
+        that screen of this app (a path under its root) with the page's path and query as the page parameter (the
+        dev-aide's "Open in screen builder").
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="label" type="xs:string" use="required"/>
+        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="agent" type="xs:string"/>
+        <xs:attribute name="screen" type="xs:string"/>
+        <xs:attribute name="sequence" type="xs:integer"/>
+    </xs:complexType></xs:element>
+
     <!-- ================ Subscreens ================ -->
     <xs:element name="subscreens"><xs:annotation>
         <xs:documentation>
@@ -579,18 +900,51 @@ along with this software (see the LICENSE.md file). If not, see
     <xs:element name="subscreens-active" substitutionGroup="AllWidgets"><xs:complexType>
         <xs:attribute name="id" type="xs:string" use="optional"/>
     </xs:complexType></xs:element>
-    <xs:element name="subscreens-panel" substitutionGroup="AllWidgets"><xs:complexType>
+    <xs:element name="subscreens-panel" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        The subscreen menu and the active subscreen together.
+    </xs:documentation></xs:annotation><xs:complexType>
         <xs:attribute name="type" default="tab">
+            <xs:annotation><xs:documentation>
+                tab: tabs over the active subscreen. popup: the menu in the header menus.
+
+                wizard (IronStone style-guide §3.10): a stepper with one step per subscreen, in menu order, titled by the menu
+                titles; the active subscreen is the current step, so the URL holds the step. Next submits the step form (the
+                first form-single of the step screen that is not in a list or a dialog) to its transition and, when the
+                answer has no errors, goes to the next step with the current parameters and those the answer gives (the
+                transition's default-response parameters); an answer that names another screen goes there instead, so a step
+                may skip steps or leave the wizard. A step without a form goes on at once. Back goes to the step before
+                without submitting, and a done step's header goes back to it, so a step keeps what it saved. The last step's
+                button (finish-text) submits its form and follows the answer; it only shows when the step has a form. The
+                step form's own submit button does the same as Next. In qvt an m-subscreens-wizard, which reads the steps
+                from the menu data in the browser (server-static too); in html the steps as a numbered sequence of links with
+                Back and Next links.
+
+                stack: the first subscreen in menu order is the bottom of the stack and the others open over it with a
+                breadcrumb back to it; no tabs (qvt m-subscreens-stack; html a breadcrumb).
+            </xs:documentation></xs:annotation>
             <xs:simpleType><xs:restriction base="xs:token">
                 <xs:enumeration value="tab"/>
                 <xs:enumeration value="popup"/>
-                <!-- TABLED, not to be part of 1.0: <xs:enumeration value="stack"/> -->
-                <!-- TABLED, not to be part of 1.0: <xs:enumeration value="wizard"/> -->
+                <xs:enumeration value="stack"/>
+                <xs:enumeration value="wizard"/>
             </xs:restriction></xs:simpleType>
         </xs:attribute>
         <xs:attribute name="id" type="xs:string" use="required"/>
         <xs:attribute name="title" type="xs:string"/>
         <xs:attribute name="header-menus-id" type="xs:string" default="header-menus"/>
+        <xs:attribute name="finish-text" type="xs:string"><xs:annotation><xs:documentation>For type wizard: the label of
+            the last step's button, Finish by default (localized). Next and Back are localized too.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="draft-form" type="xs:string"><xs:annotation><xs:documentation>For a qvt wizard only: the exact
+            form name whose unsaved fields survive Back/header navigation while this wizard is mounted. Requires
+            draft-fields and draft-parameter. Does not submit, use browser storage or change the server's draft.
+            A successful save discards its submitted snapshot; newer edits remain. Finish, a different or missing scope,
+            and leaving the wizard discard the draft. Other render modes retain their existing save/Back behavior.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="draft-fields" type="xs:string"><xs:annotation><xs:documentation>Comma-separated allowlist of
+            non-secret field names to keep for draft-form. Never include passwords, tokens or other credentials. Only
+            scalar values and arrays of scalar values are kept; all other fields remain server-provided.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="draft-parameter" type="xs:string"><xs:annotation><xs:documentation>The current URL parameter
+            that scopes the draft, such as emailAccountId. An empty or changed value clears the draft; a new mounted
+            wizard starts empty even for the same id.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
 
     <!-- ================ Sections ================ -->
@@ -695,18 +1049,21 @@ along with this software (see the LICENSE.md file). If not, see
 
     <xs:element name="container-row" substitutionGroup="AllWidgets"><xs:annotation>
         <xs:documentation>A responsive 12-column grid row. For the concept and one possible
-            implementation see http://getbootstrap.com/css/#grid</xs:documentation>
+            implementation see http://getbootstrap.com/css/#grid. The columns are its row-col elements, and the row-col
+            elements of the widgets of a section, section-iterate (a column per entry) or section-include in it.</xs:documentation>
     </xs:annotation><xs:complexType>
-        <xs:sequence><xs:element ref="row-col" maxOccurs="unbounded"/></xs:sequence>
+        <xs:choice maxOccurs="unbounded"><xs:element ref="row-col"/><xs:element ref="section"/><xs:element ref="section-iterate"/>
+            <xs:element ref="section-include"/></xs:choice>
         <xs:attribute name="id" type="xs:string"/>
         <xs:attribute name="style" type="xs:string"/>
     </xs:complexType></xs:element>
     <xs:element name="row-col"><xs:complexType>
         <xs:group ref="widget-elements" minOccurs="0" maxOccurs="unbounded"/>
-        <xs:attribute name="lg" type="xs:nonNegativeInteger"/>
-        <xs:attribute name="md" type="xs:nonNegativeInteger"/>
-        <xs:attribute name="sm" type="xs:nonNegativeInteger"/>
-        <xs:attribute name="xs" type="xs:nonNegativeInteger"/>
+        <xs:attribute name="lg" type="xs:string"><xs:annotation><xs:documentation>The columns of 12 the column takes on a
+            large screen; this and md, sm and xs may be expressions (${wide ? 8 : 12}).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="md" type="xs:string"/>
+        <xs:attribute name="sm" type="xs:string"/>
+        <xs:attribute name="xs" type="xs:string"/>
         <xs:attribute name="style" type="xs:string"/>
     </xs:complexType></xs:element>
 
@@ -764,6 +1121,46 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attributeGroup ref="attlist.panel.header-footer"/>
     </xs:complexType></xs:element>
 
+    <xs:element name="container-split" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        A master list beside a detail pane (IronStone style-guide §3.8, §8.2): the split-side (a list, usually a form-list
+        narrowed by a header find) and the split-main (the selected record, often a dynamic-container or a reused record
+        screen). From 1024 px wide the side is side-width px beside the main pane, and its width can be dragged from 200 px
+        to what leaves min-main px to the main pane; the width is kept per id for the session and in the user's
+        preferences (SPLIT_WIDTH_{id}). Below 1024 px, or when the container is narrower than the side and min-main, the
+        panes stack: with a select-parameter the main pane shows (with a back button that clears it) when the URL has a
+        value for it and the side shows when it has none, and without one both show, the side first. The selection is read
+        from the URL in the browser, so a server-static screen can use it. In qvt an m-container-split (a q-splitter); in
+        html two columns (moqui-html.css .split) stacked below 1024 px with a back link; the text modes write the side and
+        then the main pane.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence>
+            <xs:element ref="split-side"/>
+            <xs:element ref="split-main"/>
+        </xs:sequence>
+        <xs:attribute name="id" type="xs:string"><xs:annotation><xs:documentation>Needed for the side width to be
+            kept.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="side-width" type="xs:positiveInteger" default="320"><xs:annotation><xs:documentation>The width of
+            the side pane in px.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="min-main" type="xs:positiveInteger" default="480"><xs:annotation><xs:documentation>The narrowest
+            the main pane may be made by dragging, in px; a container narrower than the side and this stacks.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="side-position" default="left"><xs:simpleType><xs:restriction base="xs:token">
+            <xs:enumeration value="left"/><xs:enumeration value="right"/>
+        </xs:restriction></xs:simpleType></xs:attribute>
+        <xs:attribute name="select-parameter" type="xs:string"><xs:annotation><xs:documentation>The URL parameter that holds
+            the selected record (partyId). The side list's search-form-inputs should name it in skip-fields so the selection
+            does not filter the list.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="back-text" type="xs:string"><xs:annotation><xs:documentation>The label of the stacked layout's
+            back button, Back by default (localized).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="height" type="xs:string"><xs:annotation><xs:documentation>A CSS height for the side-by-side
+            layout (calc(100vh - 180px)), so each pane scrolls on its own; by default the panes are as tall as their content
+            and scroll with the page.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType></xs:element>
+    <xs:element name="split-side"><xs:complexType>
+        <xs:group ref="widget-elements" minOccurs="0" maxOccurs="unbounded"/></xs:complexType></xs:element>
+    <xs:element name="split-main"><xs:complexType>
+        <xs:group ref="widget-elements" minOccurs="0" maxOccurs="unbounded"/></xs:complexType></xs:element>
+
     <xs:element name="container-dialog" substitutionGroup="AllWidgets"><xs:annotation>
         <xs:documentation>The contents start out hidden with only a button with the button-text on it.
             When the button is clicked on a dialog opens to show the contents.</xs:documentation>
@@ -777,7 +1174,12 @@ along with this software (see the LICENSE.md file). If not, see
         <xs:attribute name="height" type="xs:string" default="600"/>
         <xs:attribute name="condition" type="xs:string"/>
         <xs:attribute name="type" type="color-context" default="primary"/>
-        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="icon" type="xs:string"><xs:annotation><xs:documentation>
+            The icon of the button, in place of the default open_in_new: a Material Icons name (add, edit) or, with a space or an
+            fa prefix (fa fa-plus), CSS classes.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="tooltip" type="xs:string"><xs:annotation><xs:documentation>
+            Text shown when the pointer is over the button (a q-tooltip in qvt, the title in html), localized and expanded as the
+            button-text is; an icon-only button should have one.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
 
     <xs:element name="dynamic-dialog" substitutionGroup="StandaloneFields"><xs:annotation>
@@ -796,7 +1198,9 @@ along with this software (see the LICENSE.md file). If not, see
             names and values from in addition to the parameter sub-elements.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="condition" type="xs:string"/>
         <xs:attribute name="type" type="color-context" default="primary"/>
-        <xs:attribute name="icon" type="xs:string"/>
+        <xs:attribute name="icon" type="xs:string"><xs:annotation><xs:documentation>
+            The icon of the button, in place of the default open_in_new: a Material Icons name (visibility, edit) or, with a space
+            or an fa prefix (fa fa-eye), CSS classes.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
     <xs:element name="dynamic-container" substitutionGroup="StandaloneFields"><xs:annotation>
         <xs:documentation>Container contents are immediately loaded from the server at the given
@@ -832,15 +1236,279 @@ along with this software (see the LICENSE.md file). If not, see
             </xs:documentation></xs:annotation>
         </xs:attribute>
         <xs:attribute name="icon" type="xs:string"><xs:annotation>
-            <xs:documentation>Icon name, actually an icon style used in an 'i' element in HTML output.</xs:documentation></xs:annotation></xs:attribute>
+            <xs:documentation>An icon before the text: a Material Icons name (more_vert, tune) or, with a space or an fa prefix
+                (fa fa-ellipsis-v), CSS classes for an 'i' element.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="badge" type="xs:string"><xs:annotation>
             <xs:documentation>Text to put in a badge on the right side</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="tooltip" type="xs:string"/>
-        <xs:attribute name="btn-type" type="color-context" default="primary"/>
+        <xs:attribute name="btn-type" type="color-context" default="primary"><xs:annotation><xs:documentation>
+            The color of the menu button, as on link: tonal without it or in the given color, the filled primary button
+            with primary written explicitly.</xs:documentation></xs:annotation></xs:attribute>
         <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>
             If specified and evaluates to false link is not rendered.</xs:documentation></xs:annotation></xs:attribute>
     </xs:complexType></xs:element>
 
+
+    <!-- ================ Shell ================ -->
+    <xs:element name="context" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        The screen context of the suite shell: what this screen shows, for quick create (the link chip and prefills),
+        Chatter, record files, the Today panel and Assist. In qvt it is an m-screen-context, which registers the values
+        with the shell's root while the screen is shown (the root's screenContext); in a server-static qvt screen the
+        expressions are bound in the browser over the screen's actions data. It renders nothing in the other modes. The
+        attributes may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="record-entity" type="xs:string"><xs:annotation><xs:documentation>The entity of the record the
+            screen shows (mantle.order.OrderHeader).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="record-id" type="xs:string"><xs:annotation><xs:documentation>Its id, such as ${orderId}. The
+            record is in the context only with an entity and an id.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="title" type="xs:string"><xs:annotation><xs:documentation>The record's title, localized.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="selection-form" type="xs:string"><xs:annotation><xs:documentation>The form-list whose selected
+            rows are the selection.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:attributeGroup name="AttlistRecordPanel">
+        <xs:attribute name="id" type="xs:string"><xs:annotation><xs:documentation>The id of the panel's dynamic container,
+            for a submit-reload-id or $root.reloadContainer().</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="record-entity" type="xs:string" use="required"><xs:annotation><xs:documentation>The entity of the
+            record (mantle.work.effort.WorkEffort).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="record-id" type="xs:string" use="required"><xs:annotation><xs:documentation>Its id, such as
+            ${workEffortId}. Without an entity and an id nothing is loaded.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>If specified and evaluates to
+            false the panel is not rendered.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="style" type="xs:string"><xs:annotation><xs:documentation>CSS classes for the panel.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:attributeGroup>
+    <xs:element name="chatter" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        The timeline of a record (IronStone design-drawers-commons §15): messages, notes, activities, followers and
+        changes, with the compose bar. The framework stays free of the data model behind it: the element loads the
+        subscreen of the current app root that the theme value STRT_CHATTER_SCREEN names (BOSS: Chatter, mounted in every
+        app root from Shared/Chatter.xml) as its own request, &lt;app root&gt;/&lt;name&gt;?recordEntity=&amp;recordId=&amp;appRoot=, so
+        the app's authorization and entity filters apply. In qvt an m-chatter, whose expressions are bound over the actions
+        data in a server-static screen; it renders nothing (logged once in the browser) when the theme value is empty, the
+        current app root does not mount that subscreen or the user may not view it. In html a plain link to that screen
+        when the html theme names one, else nothing; nothing in the other modes. The attributes may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attributeGroup ref="AttlistRecordPanel"/>
+        <xs:attribute name="default-tab" type="xs:string"><xs:annotation><xs:documentation>The compose tab the screen
+            opens on (design §15 per-app defaults): message (send a message), log (log a note) or activity (schedule an
+            activity). Passed as the defaultTab parameter; the screen chooses when it is empty.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="hide" type="xs:string"><xs:annotation><xs:documentation>A comma list of what the screen
+            leaves out on this record (message, activity...), as the hide parameter, such as hide="message" for the notes
+            and activities only of Warehouse.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:element name="record-files" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        The files of a record (IronStone design-drawers-commons §9 RecordFiles): upload, list, preview, share, as the
+        chatter element does it with the subscreen the theme value STRT_RECORD_FILES_SCREEN names (BOSS: RecordFiles,
+        from Shared/RecordFiles.xml), &lt;app root&gt;/&lt;name&gt;?recordEntity=&amp;recordId=&amp;appRoot=. In qvt an m-record-files; nothing
+        when the theme value is empty or the app root does not mount it; in html a plain link or nothing.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attributeGroup ref="AttlistRecordPanel"/>
+    </xs:complexType></xs:element>
+    <xs:element name="html-view" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        An email or other untrusted HTML body (IronStone design-drawers-commons §12 reading pane, §19 m-html-view), shown
+        in a frame sandboxed without scripts: in qvt an m-html-view, which cleans the HTML with DOMPurify in the browser,
+        blocks remote images (with a Show images bar) unless allow-remote, shows cid: images from cid-map, collapses the
+        reply history at the end, opens links in a new window, follows dark mode and is as tall as its content; bound over
+        the screen's data in a server-static screen. In html the HTML cleaned on the server (the safe set) in a sandboxed
+        frame that loads no image but data:, or the text escaped. The text and print modes write the text (or the HTML's
+        text). The attributes may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="html" type="xs:string"><xs:annotation><xs:documentation>The HTML body, such as
+            ${emailMessage.body}. It is cleaned before it is shown; nothing in it runs.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="text" type="xs:string"><xs:annotation><xs:documentation>A text/plain body, shown when html is
+            empty: escaped, its addresses and URLs as links, the reply history collapsed.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="allow-remote" type="xs:string"><xs:annotation><xs:documentation>A condition: remote images show
+            at once (a trusted sender); otherwise they wait for Show images.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="cid-map" type="xs:string"><xs:annotation><xs:documentation>An expression of a Map from Content-ID
+            to an image URL of this server (or a data: URL), for the cid: images of the body.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="collapse-quotes" type="boolean" default="true"/>
+        <xs:attribute name="dark" default="auto"><xs:annotation><xs:documentation>auto follows the theme, on and off fix
+            it. A designed message (its own colors) stays a light card in dark mode.</xs:documentation></xs:annotation>
+            <xs:simpleType><xs:restriction base="xs:token"><xs:enumeration value="auto"/><xs:enumeration value="on"/>
+                <xs:enumeration value="off"/></xs:restriction></xs:simpleType></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"/>
+        <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType></xs:element>
+
+    <xs:element name="markdown-view" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Markdown text shown as HTML, such as a description or a wiki page: in qvt an m-markdown, which renders it with Marked
+        (GitHub flavored) and cleans it with DOMPurify in the browser, gives each heading an id from its text, resolves a
+        relative link from base-path, opens a link to another site in a new tab and follows an application link in the shell,
+        with tables and code blocks that read in dark mode, and draws a mermaid fenced block as its diagram (Mermaid with
+        strict security; a diagram that does not parse stays as its text); bound over the screen's data in a server-static
+        screen. In html and the text modes the text as it is, mermaid blocks included. The attributes may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="text" type="xs:string" use="required"><xs:annotation><xs:documentation>The markdown, such as
+            ${wikiPage.text}. Raw HTML in it is cleaned; nothing in it runs.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="base-path" type="xs:string"><xs:annotation><xs:documentation>The path a relative link is
+            resolved from, a directory: a/b from /apps/wiki/Space is /apps/wiki/Space/a/b.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="heading-prefix" type="xs:string" default="md-"><xs:annotation><xs:documentation>The start of
+            each heading's id.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="strip-title" type="xs:string"><xs:annotation><xs:documentation>A first heading with this text
+            is left out (the screen shows the title already).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="wiki-links" type="boolean" default="false"><xs:annotation><xs:documentation>[[path]] and
+            [[path|text]] are links to wiki:path.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="copy" type="boolean" default="false"><xs:annotation><xs:documentation>An icon button in the
+            top right corner that copies the markdown text (qvt).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"/>
+        <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType></xs:element>
+
+    <xs:element name="code-view" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Source code with line numbers, such as a file of a repository: in qvt an m-code, which highlights it with highlight.js
+        in the browser (Java, Groovy, Kotlin, XML and HTML, JavaScript, TypeScript, Rust, Python, SQL, YAML, JSON, Markdown,
+        CSS, shell and diff), marks the highlight-lines and scrolls to the first; bound over the screen's data in a
+        server-static screen. In html, print and tui a pre of the text; in the text modes the text as it is. The attributes
+        may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="text" type="xs:string" use="required"><xs:annotation><xs:documentation>The code, such as
+            ${blobText}. Nothing in it runs or is compiled.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="language" type="xs:string"><xs:annotation><xs:documentation>A highlight.js language (java,
+            groovy, kotlin, xml, javascript, typescript, rust, python, sql, yaml, json, markdown, css, bash, diff); from
+            file-name's extension when empty, else plain text (a language is never guessed).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="file-name" type="xs:string"><xs:annotation><xs:documentation>The file's name or path, whose
+            extension names the language when language is empty.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="line-numbers" type="boolean" default="true"/>
+        <xs:attribute name="highlight-lines" type="xs:string"><xs:annotation><xs:documentation>Lines to mark, as 3,5-7;
+            the first is scrolled to.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"/>
+        <xs:attribute name="style" type="xs:string"/>
+    </xs:complexType></xs:element>
+
+    <!-- ================ Status ================ -->
+    <xs:element name="status-bar" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        The status of a record in its flow, for the title row of a detail screen (IronStone style-guide §3.3, §5.2, §8.2): a
+        row of stage chips (the done ones checked and tinted, the current one filled in its color, the ones to come outlined)
+        and the transitions the user may take from the current status as buttons: the next stage as the primary action, the
+        others (Hold, Cancel) as secondary ones, those that end badly in the negative color. Each button posts the transition
+        with the new status in parameter-name (statusId) and the parameters, after a confirmation. The stages and transitions
+        come from org.moqui.impl.StatusServices.get#StatusBar (the StatusItem rows of the type in sequence order and the
+        StatusFlowTransition rows of the flow); the colors from the status color map (StatusItem.statusColor, else the words of
+        the status id: get#StatusColors). In qvt an m-status-bar; in a server-static screen the attributes are bound over the
+        screen's actions data and the browser asks the root screen's statusBar transition for the flow. In html chips and
+        buttons; in text and print the status description. The attributes may hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:sequence><xs:element minOccurs="0" maxOccurs="unbounded" ref="parameter"/></xs:sequence>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="status-id" type="xs:string" use="required"><xs:annotation><xs:documentation>The current
+            status, such as ${workEffort.statusId}. Nothing is written when it is empty.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="status-type-id" type="xs:string"><xs:annotation><xs:documentation>The status type whose items
+            are the stages. Defaults to the type of the current status.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="status-flow-id" type="xs:string" default="Default"><xs:annotation><xs:documentation>The status
+            flow whose transitions are offered (a record's statusFlowId); Default by default.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="stages" type="xs:string"><xs:annotation><xs:documentation>The stages in order, a comma list of
+            status ids or an expression of a list (${['WeInPlanning', 'WeInProgress', 'WeComplete']}). By default the statuses of
+            the type in sequence order, without those that wait or end badly (On Hold, Cancelled), which show only when
+            current.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="transition" type="xs:string"><xs:annotation><xs:documentation>The transition each button posts,
+            with the new status and the parameters; it changes the record's status and answers with the screen, so the bar
+            shows the new status. Without it the bar shows the stages and no buttons.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="parameter-name" type="xs:string" default="statusId"><xs:annotation><xs:documentation>The
+            parameter that takes the new status.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="parameter-map" type="xs:string"><xs:annotation><xs:documentation>A map of parameters posted with
+            the new status, such as {workEffortId:workEffortId}, beside the parameter sub-elements.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="allowed-status-ids" type="xs:string"><xs:annotation><xs:documentation>The statuses the user may
+            move the record to, a comma list or an expression of a list; all the flow's transitions by default (those with a
+            userPermissionId only with that permission). An empty list allows none.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="read-only" type="xs:string"><xs:annotation><xs:documentation>When true (it may be an
+            expression, ${!canUpdate}) only the stages show, as for a role that may not change the record: the same layout
+            with the actions gone.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="title" type="xs:string"><xs:annotation><xs:documentation>The record's name in the confirmation
+            of a change ("Approve: SO10023?"); without it the confirmation is the transition's label.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="confirm" type="boolean" default="true"><xs:annotation><xs:documentation>Whether a change asks
+            first. Every status change confirms by the style guide.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>If specified and evaluates to
+            false the bar is not rendered.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="style" type="xs:string"><xs:annotation><xs:documentation>CSS classes for the bar.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+
+    <xs:element name="report-panel" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Render an authorized server-computed columnar frame with a panel definition. Data attributes are expressions.
+        qvt uses m-report-panel, tui its native twin, and html/print/text/CSV/XML render the same values.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="frame" type="xs:string" use="required"/>
+        <xs:attribute name="panel" type="xs:string"/>
+        <xs:attribute name="title" type="xs:string"/>
+        <xs:attribute name="condition" type="xs:string"/>
+    </xs:complexType></xs:element>
+    <xs:element name="report-dashboard" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Render a dashboard body and its authorized frames keyed by panel id. Data attributes are expressions.
+        This does not change the existing dashboard grid widget.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="dashboard" type="xs:string" use="required"/>
+        <xs:attribute name="frames" type="xs:string" use="required"/>
+        <xs:attribute name="condition" type="xs:string"/>
+    </xs:complexType></xs:element>
+    <xs:element name="report-embed" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Place a saved dashboard, or a library panel, on any screen, such as an app landing page or a record page. The
+        server renders it as the viewer (render#Dashboard), with the viewer's dataset permissions and row filters, so it
+        never widens access. It renders nothing for a visitor who is not signed in (such as on a public site), or when the
+        viewer may not read the definition; the rest of the screen still renders. In qvt it is an m-dashboard in a compact
+        embedded form with a link to open it in the Dashboards app, in tui a report-dashboard, and html/print/text/CSV/XML
+        render the same values as report-dashboard. A screen with one is not a server-static template.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="definition-id" type="xs:string" use="required"><xs:annotation><xs:documentation>
+            The id of a dashboard or library panel definition. Expanded as a string.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="panel-id" type="xs:string"><xs:annotation><xs:documentation>
+            One panel of the dashboard to show alone. Expanded as a string.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="from" type="xs:string"><xs:annotation><xs:documentation>
+            The start of the time range, relative (now-7d, now/d) or absolute; defaults to now-7d. Expanded as a string.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="thru" type="xs:string"><xs:annotation><xs:documentation>
+            The exclusive end of the time range; defaults to now. Expanded as a string.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="variables" type="xs:string"><xs:annotation><xs:documentation>
+            An expression for a map of dashboard variable values by name, such as {customerId:partyId}.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="condition" type="xs:string"/>
+    </xs:complexType></xs:element>
+
+    <!-- ================ Dashboards ================ -->
+    <xs:element name="dashboard" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        Lays out number cards and other widgets in a responsive grid: as many columns as fit, each at least min-width
+        pixels wide (CSS grid auto-fill), so a row of cards wraps on a narrow screen. Each child is a cell; a child that
+        renders nothing (a false condition) leaves no gap. The landings and 360s of the IronStone style guide (§3.1) put
+        their counters in one. There is no arrangement by the user yet. In qvt a div.m-dashboard, in html a div.dashboard;
+        the text and print modes write the children one after another.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:group ref="widget-elements" minOccurs="0" maxOccurs="unbounded"/>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="min-width" type="xs:positiveInteger"><xs:annotation><xs:documentation>The narrowest a
+            column may be, in pixels. Defaults to 200 (in the style sheets).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="style" type="xs:string"><xs:annotation><xs:documentation>CSS classes for the grid.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
+    <xs:element name="number-card" substitutionGroup="AllWidgets"><xs:annotation><xs:documentation>
+        A counter: a label over a large number, with an optional change and icon, the whole card a link into the list it
+        counts (IronStone style-guide §8.2). In qvt an m-number-card, a q-card flat bordered with the title as text-overline
+        and the value as text-h5; in a server-static screen the attributes are bound over the screen's actions data, as a
+        label's text is. In html a plain card (the link an anchor); in text "Title: value (delta)". The attributes may
+        hold ${} expressions.
+    </xs:documentation></xs:annotation><xs:complexType>
+        <xs:attribute name="id" type="xs:string"/>
+        <xs:attribute name="title" type="xs:string" use="required"><xs:annotation><xs:documentation>The label, localized
+            (Open orders).</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="value" type="xs:string" use="required"><xs:annotation><xs:documentation>The number as shown,
+            such as ${openOrderCount} or ${ec.l10n.formatCurrency(total, currencyUomId)}.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="delta" type="xs:string"><xs:annotation><xs:documentation>The change, as shown (+3, -12%). Its
+            sign, a leading + or - or the number's, with delta-good chooses its color and arrow; no sign is neutral.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="delta-good" default="up"><xs:annotation><xs:documentation>Which way is good: up (a rise is
+            positive, green) or down (a fall is, as for late shipments).</xs:documentation></xs:annotation>
+            <xs:simpleType><xs:restriction base="xs:token"><xs:enumeration value="up"/><xs:enumeration value="down"/></xs:restriction></xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="icon" type="xs:string"><xs:annotation><xs:documentation>A Quasar icon name, Material Symbols
+            outlined (sym_o_receipt_long) or Material Icons, or CSS classes when it has a space.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="link" type="xs:string"><xs:annotation><xs:documentation>Where the card goes: a screen path or
+            transition of this screen, as the url of a link with url-type transition, with a query string for the filter
+            (../Tasks?dueToday=true); a link to something other than a screen is a plain anchor.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="size" default="md"><xs:annotation><xs:documentation>The size of the value: sm (text-h6), md
+            (text-h5) or lg (text-h4).</xs:documentation></xs:annotation>
+            <xs:simpleType><xs:restriction base="xs:token"><xs:enumeration value="sm"/><xs:enumeration value="md"/><xs:enumeration value="lg"/></xs:restriction></xs:simpleType>
+        </xs:attribute>
+        <xs:attribute name="condition" type="xs:string"><xs:annotation><xs:documentation>If specified and evaluates to
+            false the card is not rendered.</xs:documentation></xs:annotation></xs:attribute>
+        <xs:attribute name="style" type="xs:string"><xs:annotation><xs:documentation>CSS classes for the card.</xs:documentation></xs:annotation></xs:attribute>
+    </xs:complexType></xs:element>
 
     <!-- ================ Includes ================ -->
     <!-- possible good idea, but not implementing in 1.0; should use render-mode.text instead
@@ -909,9 +1577,14 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:extension base="xs:string">
                 <xs:attribute name="type" type="xs:string" default="any">
                     <xs:annotation><xs:documentation>
-                        Can be any valid render mode. Default supported modes include: text, html, vuet, xsl-fo, xml, and csv.
+                        Can be any valid render mode. Default supported modes include: text, html, html-print (alias xsl-fo), xml, csv, qvt, qjs, qvue, and tui.
                         Values can be comma separated to apply to multiple render modes.
                         A value of "any" will cause it to be used if no other element matches the current output type.
+                        A screen that goes custom in one render mode is written again for each other mode it should work in:
+                        a text of type qvt (or a qvue screen) gets a text of type tui beside it for the terminal client, whose
+                        content is the JSON of one node or an array of nodes of the tui screen model, every value through
+                        JSON.stringify. Without one the terminal shows a placeholder with the browser address
+                        (docs/ui/TUI.md; moqui lint --screens lists them).
                     </xs:documentation></xs:annotation>
                 </xs:attribute>
                 <xs:attribute name="location" type="xs:string">

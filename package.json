@@ -82,6 +82,16 @@
         }
       },
       {
+        "id": "moquiHelper.fileKind.gitecas",
+        "description": "%fileKindColorGitecas%",
+        "defaults": {
+          "dark": "#80CBC4",
+          "light": "#00695C",
+          "highContrast": "#80CBC4",
+          "highContrastLight": "#00695C"
+        }
+      },
+      {
         "id": "moquiHelper.fileKind.screen",
         "description": "%fileKindColorScreen%",
         "defaults": {

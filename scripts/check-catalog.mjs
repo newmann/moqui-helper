@@ -24,8 +24,8 @@ const systems = entries('system', 'systemId');
 const uris = entries('uri', 'name');
 const errors = [];
 
-if (xsdFiles.length !== 12) {
-  errors.push(`expected 12 xsd files, found ${xsdFiles.length}`);
+if (xsdFiles.length !== 13) {
+  errors.push(`expected 13 xsd files, found ${xsdFiles.length}`);
 }
 
 for (const file of xsdFiles) {

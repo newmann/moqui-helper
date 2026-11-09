@@ -48,6 +48,13 @@ export const FILE_KINDS: readonly FileKind[] = [
     colorKey: 'fileKindColorEmecas',
   },
   {
+    root: 'gitecas',
+    badge: 'Ge',
+    tooltipKey: 'fileKindGitecas',
+    colorId: 'moquiHelper.fileKind.gitecas',
+    colorKey: 'fileKindColorGitecas',
+  },
+  {
     root: 'screen',
     badge: 'Sc',
     tooltipKey: 'fileKindScreen',

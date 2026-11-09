@@ -1,6 +1,6 @@
 import { facadeDataChain } from '../refs/facadeScope';
 import { Range } from '../types';
-import { attribute, ScanElement, ScanResult } from '../xml/scan';
+import { attribute, decodeEntities, ScanElement, ScanResult } from '../xml/scan';
 import { ComponentInfo } from './components';
 import { serviceClassName, serviceFullName } from './services';
 
@@ -8,6 +8,7 @@ export interface FieldDef {
   name: string;
   type: string;
   isPk: boolean;
+  description?: string;
   uri: string;
   nameRange: Range;
   /** Unprefixed member field when `name` was expanded by alias-all. */
@@ -84,6 +85,7 @@ export interface EntityContribution {
   aliasRange?: Range;
   alias: string;
   noUpdateStamp: boolean;
+  description?: string;
   fields: FieldDef[];
   relationships: RelationshipDef[];
   view?: ViewDef;
@@ -100,6 +102,7 @@ export interface ServiceParameterMember {
   name: string;
   type: string;
   required: boolean;
+  description?: string;
   uri: string;
   nameRange: Range;
   children: ServiceMember[];
@@ -124,6 +127,7 @@ export interface ServiceModel {
   verbRange: Range;
   nounRange?: Range;
   type: string;
+  description?: string;
   inputs: ServiceMember[];
   outputs: ServiceMember[];
   implementsServices: ServiceImplementsRef[];
@@ -140,9 +144,10 @@ export interface EntityShape {
   fields: FieldDef[];
   relationships: RelationshipDef[];
   noUpdateStamp: boolean;
+  description?: string;
 }
 
-export function extractEntityModels(scan: ScanResult, uri: string): {
+export function extractEntityModels(scan: ScanResult, uri: string, text: string): {
   bases: EntityContribution[];
   extensions: EntityContribution[];
 } {
@@ -169,6 +174,7 @@ export function extractEntityModels(scan: ScanResult, uri: string): {
       entityName.includes('.') ? entityName : `${packageName}.${entityName}`,
       element.name === 'view-entity',
       entityNameAttribute.range,
+      text,
     );
     if (element.name === 'extend-entity') {
       extensions.push(contribution);
@@ -184,6 +190,7 @@ export function extractServiceModels(
   filePath: string,
   uri: string,
   components: readonly ComponentInfo[],
+  text: string,
 ): ServiceModel[] {
   if (scan.rootName !== 'services') {
     return [];
@@ -205,6 +212,7 @@ export function extractServiceModels(
     }
     const nounAttribute = attribute(element, 'noun');
     const noun = nounAttribute?.value.trim() ?? '';
+    const description = readDescription(scan, index, text);
     models.push({
       name: serviceFullName(className, verb, noun),
       uri,
@@ -212,8 +220,9 @@ export function extractServiceModels(
       verbRange: verbAttribute.range,
       nounRange: nounAttribute?.range,
       type: attribute(element, 'type')?.value.trim() || 'inline',
-      inputs: readParameterGroup(scan, index, 'in-parameters', uri),
-      outputs: readParameterGroup(scan, index, 'out-parameters', uri),
+      ...(description ? { description } : {}),
+      inputs: readParameterGroup(scan, index, 'in-parameters', uri, text),
+      outputs: readParameterGroup(scan, index, 'out-parameters', uri, text),
       implementsServices: readImplements(scan, index),
     });
   }
@@ -244,9 +253,11 @@ function readContribution(
   canonical: string,
   view: boolean,
   entityNameRange: Range,
+  text: string,
 ): EntityContribution {
   const element = scan.elements[index];
   const aliasAttribute = attribute(element, 'short-alias');
+  const description = readDescription(scan, index, text);
   const fields: FieldDef[] = [];
   const relationships: RelationshipDef[] = [];
   const viewDef: ViewDef | undefined = view ? { members: [], aliasAll: [], aliases: [] } : undefined;
@@ -256,7 +267,7 @@ function readContribution(
       continue;
     }
     if (child.name === 'field') {
-      const field = readField(child, uri);
+      const field = readField(scan, childIndex, uri, text);
       if (field) {
         fields.push(field);
       }
@@ -323,25 +334,50 @@ function readContribution(
     aliasRange: aliasAttribute?.range,
     alias: aliasAttribute?.value.trim() ?? '',
     noUpdateStamp: attribute(element, 'no-update-stamp')?.value.trim() === 'true',
+    ...(description ? { description } : {}),
     fields,
     relationships,
     view: viewDef,
   };
 }
 
-function readField(element: ScanElement, uri: string): FieldDef | undefined {
+function readField(scan: ScanResult, index: number, uri: string, text: string): FieldDef | undefined {
+  const element = scan.elements[index];
   const nameAttribute = attribute(element, 'name');
   const name = nameAttribute?.value.trim();
   if (!name || !nameAttribute) {
     return undefined;
   }
+  const description = readDescription(scan, index, text);
   return {
     name,
     type: attribute(element, 'type')?.value.trim() ?? '',
     isPk: attribute(element, 'is-pk')?.value.trim() === 'true',
+    ...(description ? { description } : {}),
     uri,
     nameRange: nameAttribute.range,
   };
+}
+
+function readDescription(scan: ScanResult, parentIndex: number, text: string): string | undefined {
+  for (const child of scan.elements) {
+    if (child.parentIndex !== parentIndex || child.name !== 'description') {
+      continue;
+    }
+    const value = descriptionText(text, child);
+    return value || undefined;
+  }
+  return undefined;
+}
+
+function descriptionText(text: string, element: ScanElement): string {
+  if (element.outerEnd <= element.endOffset) {
+    return '';
+  }
+  const inner = text.slice(element.endOffset, element.outerEnd);
+  const close = inner.lastIndexOf('</');
+  const raw = close >= 0 ? inner.slice(0, close) : inner;
+  return decodeEntities(raw).replace(/\s+/g, ' ').trim();
 }
 
 function readRelationship(scan: ScanResult, index: number, uri: string): RelationshipDef | undefined {
@@ -377,18 +413,18 @@ function readRelationship(scan: ScanResult, index: number, uri: string): Relatio
   };
 }
 
-function readParameterGroup(scan: ScanResult, parentIndex: number, groupName: string, uri: string): ServiceMember[] {
+function readParameterGroup(scan: ScanResult, parentIndex: number, groupName: string, uri: string, text: string): ServiceMember[] {
   const members: ServiceMember[] = [];
   for (let index = 0; index < scan.elements.length; index++) {
     const element = scan.elements[index];
     if (element.parentIndex === parentIndex && element.name === groupName) {
-      members.push(...readMembers(scan, index, uri));
+      members.push(...readMembers(scan, index, uri, text));
     }
   }
   return members;
 }
 
-function readMembers(scan: ScanResult, parentIndex: number, uri: string): ServiceMember[] {
+function readMembers(scan: ScanResult, parentIndex: number, uri: string, text: string): ServiceMember[] {
   const members: ServiceMember[] = [];
   for (let index = 0; index < scan.elements.length; index++) {
     const element = scan.elements[index];
@@ -402,14 +438,16 @@ function readMembers(scan: ScanResult, parentIndex: number, uri: string): Servic
         continue;
       }
       const type = attribute(element, 'type')?.value.trim();
+      const description = readDescription(scan, index, text);
       members.push({
         kind: 'parameter',
         name,
         type: type || 'String',
         required: attribute(element, 'required')?.value.trim() === 'true',
+        ...(description ? { description } : {}),
         uri,
         nameRange: nameAttribute.range,
-        children: readMembers(scan, index, uri),
+        children: readMembers(scan, index, uri, text),
       });
     } else if (element.name === 'auto-parameters') {
       const auto = readAutoParameters(scan, index);

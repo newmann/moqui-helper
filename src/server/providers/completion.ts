@@ -14,7 +14,7 @@ import { collectServiceIncludeRefs, includeLabels, includeRefAt } from '../refs/
 import { collectServiceParamRefs, serviceParamLabels, serviceParamRefAt } from '../refs/serviceParams';
 import { encodeXmlAttribute, textTemplateLabels, textTemplateUseAt } from '../refs/textTemplates';
 import { fieldsOfForm } from '../refs/memberResolve';
-import { resolveScreenLocation } from '../refs/resolve';
+import { resolveScreenLocation, screenFileBase } from '../refs/resolve';
 import { decodeEntities } from '../xml/scan';
 
 const SYSTEM_SCREEN_PREFIX = 'runtime/base-component/tools/screen/System/';
@@ -117,7 +117,7 @@ export function completionAt(
       return [];
     }
     const prefix = decodeEntities(text.slice(pathHit.ref.startOffset, Math.min(offset, pathHit.ref.endOffset)));
-    return pathLabels(prefix, fromFsPath, index).map((item) => ({
+    return pathLabels(prefix, fromFsPath, index, pathHit.ref.resolve).map((item) => ({
       label: item.label,
       kind: item.directory ? CompletionItemKind.Folder : CompletionItemKind.File,
       filterText: item.label,
@@ -174,6 +174,12 @@ function memberLabels(ref: MemberRef, prefix: string, index: WorkspaceIndex, fro
   if (ref.role === 'transition') {
     return filterPrefix(transitionLabels(fromFsPath, index), prefix);
   }
+  if (ref.role === 'url-name') {
+    return filterPrefix(urlNameLabels(prefix, fromFsPath, index), prefix);
+  }
+  if (ref.role === 'screen-path') {
+    return screenPathLabels(prefix, fromFsPath, index);
+  }
   if (ref.role === 'transition-include') {
     return filterPrefix(
       locationMembers(ref, fromFsPath, index)
@@ -194,6 +200,10 @@ function memberLabels(ref: MemberRef, prefix: string, index: WorkspaceIndex, fro
       for (const label of screenLabels(prefix, fromFsPath, index)) {
         labels.add(label);
       }
+    } else {
+      for (const label of filterPrefix(directorySubscreenLabels(fromFsPath, index), prefix)) {
+        labels.add(label);
+      }
     }
     return [...labels];
   }
@@ -205,6 +215,86 @@ function memberLabels(ref: MemberRef, prefix: string, index: WorkspaceIndex, fro
     return filterPrefix(fieldsOfForm(form, index).map((member) => member.name), prefix);
   }
   return [];
+}
+
+function screenPathLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex): string[] {
+  if (prefix.startsWith('./') || prefix.startsWith('../')) {
+    return relativeScreenPathLabels(prefix, fromFsPath, index);
+  }
+  if (prefix.startsWith('//') || prefix.startsWith('component://')) {
+    return screenLabels(prefix, fromFsPath, index);
+  }
+  const labels = new Set<string>();
+  for (const member of index.screenScope(fromFsPath)) {
+    if (member.kind === 'subscreens-item') {
+      labels.add(member.name);
+    }
+  }
+  if (!fromFsPath) {
+    return filterPrefix([...labels], prefix);
+  }
+  const dir = pathKeyDir(fromFsPath);
+  const nestedDirs = new Set(
+    index.screenPaths(fromFsPath).map((screenPath) =>
+      pathKey(path.join(path.dirname(screenPath), path.basename(screenPath, '.xml'))),
+    ),
+  );
+  for (const record of index.screens()) {
+    const target = index.symbolPath(record);
+    if (!target) {
+      continue;
+    }
+    const targetDir = pathKeyDir(target);
+    if (nestedDirs.has(targetDir) || (targetDir === dir && pathKey(target) !== pathKey(fromFsPath))) {
+      labels.add(path.basename(target, '.xml'));
+    }
+  }
+  return filterPrefix([...labels], prefix);
+}
+
+function urlNameLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex): string[] {
+  const letter = prefix[0] ?? '';
+  const transitions = !letter || (letter >= 'a' && letter <= 'z');
+  const screens = !letter || (letter >= 'A' && letter <= 'Z');
+  const labels = new Set<string>();
+  if (transitions) {
+    for (const member of index.screenScope(fromFsPath)) {
+      if (member.kind === 'transition') {
+        labels.add(member.name);
+      }
+    }
+  }
+  if (screens) {
+    for (const member of index.screenScope(fromFsPath)) {
+      if (member.kind === 'subscreens-item') {
+        labels.add(member.name);
+      }
+    }
+    for (const name of nestedScreenLabels(fromFsPath, index)) {
+      labels.add(name);
+    }
+  }
+  return [...labels];
+}
+
+function nestedScreenLabels(fromFsPath: string, index: WorkspaceIndex): string[] {
+  if (!fromFsPath) {
+    return [];
+  }
+  const nestedDirs = new Set(
+    index.screenPaths(fromFsPath).map((screenPath) =>
+      pathKey(path.join(path.dirname(screenPath), path.basename(screenPath, '.xml'))),
+    ),
+  );
+  const labels: string[] = [];
+  for (const record of index.screens()) {
+    const target = index.symbolPath(record);
+    if (!target || !nestedDirs.has(pathKeyDir(target))) {
+      continue;
+    }
+    labels.push(path.basename(target, '.xml'));
+  }
+  return labels;
 }
 
 function transitionLabels(fromFsPath: string, index: WorkspaceIndex): string[] {
@@ -261,6 +351,26 @@ function itemLabels(fromFsPath: string, index: WorkspaceIndex): string[] {
     .map((member) => member.name);
 }
 
+function directorySubscreenLabels(fromFsPath: string, index: WorkspaceIndex): string[] {
+  if (!fromFsPath) {
+    return [];
+  }
+  const nestedDirs = new Set(
+    index.screenPaths(fromFsPath).map((screenPath) =>
+      pathKey(path.join(path.dirname(screenPath), path.basename(screenPath, '.xml'))),
+    ),
+  );
+  const labels = new Set<string>();
+  for (const record of index.screens()) {
+    const target = index.symbolPath(record);
+    if (!target || !nestedDirs.has(pathKeyDir(target))) {
+      continue;
+    }
+    labels.add(path.basename(target, '.xml'));
+  }
+  return [...labels];
+}
+
 function locationMembers(ref: MemberRef, fromFsPath: string, index: WorkspaceIndex) {
   if (!ref.location || ref.locationDynamic || ref.location.includes('${')) {
     return [];
@@ -288,10 +398,16 @@ function pathKeyDir(fsPath: string): string {
 }
 
 function memberKind(label: string, ref: MemberRef): CompletionItemKind {
+  if (ref.role === 'screen-path' && (label.includes('/') || label.startsWith('.'))) {
+    return CompletionItemKind.File;
+  }
   if (ref.role === 'subscreens-default' && (label.includes('/') || label.startsWith('.'))) {
     return CompletionItemKind.File;
   }
   if (ref.role === 'transition' || ref.role === 'transition-include') {
+    return CompletionItemKind.Function;
+  }
+  if (ref.role === 'url-name' && label[0] >= 'a' && label[0] <= 'z') {
     return CompletionItemKind.Function;
   }
   if (ref.role === 'field') {
@@ -375,6 +491,32 @@ function relativeScreenLabels(prefix: string, fromFsPath: string, index: Workspa
       continue;
     }
     let relative = toPosix(path.relative(fromDir, target));
+    if (!relative || relative === '.') {
+      continue;
+    }
+    if (!relative.startsWith('.')) {
+      relative = `./${relative}`;
+    }
+    if (relative.startsWith(prefix)) {
+      labels.add(relative);
+    }
+  }
+  return [...labels];
+}
+
+function relativeScreenPathLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex): string[] {
+  if (!fromFsPath) {
+    return [];
+  }
+  const fromBase = screenFileBase(fromFsPath);
+  const labels = new Set<string>();
+  for (const record of index.screens()) {
+    const target = index.symbolPath(record);
+    if (!target) {
+      continue;
+    }
+    const withoutXml = target.toLowerCase().endsWith('.xml') ? target.slice(0, -4) : target;
+    let relative = toPosix(path.relative(fromBase, withoutXml));
     if (!relative || relative === '.') {
       continue;
     }

@@ -448,13 +448,13 @@ function renameScreen(
     if (target.type !== 'screen' || !sameSymbol(target.record, symbol)) {
       continue;
     }
-    if (ref.lookup === oldStem) {
-      edits.push({ uri: ref.uri, range: ref.range, text: newStem });
-      continue;
-    }
-    const slash = ref.lookup.lastIndexOf('/');
-    if (slash >= 0 && ref.lookup.slice(slash + 1) === oldName) {
-      edits.push({ uri: ref.uri, range: ref.range, text: `${ref.lookup.slice(0, slash + 1)}${newName}` });
+    const slash = Math.max(ref.lookup.lastIndexOf('/'), ref.lookup.lastIndexOf('\\'));
+    const leaf = slash >= 0 ? ref.lookup.slice(slash + 1) : ref.lookup;
+    const prefix = slash >= 0 ? ref.lookup.slice(0, slash + 1) : '';
+    if (leaf === oldStem) {
+      edits.push({ uri: ref.uri, range: ref.range, text: `${prefix}${newStem}` });
+    } else if (leaf === oldName) {
+      edits.push({ uri: ref.uri, range: ref.range, text: `${prefix}${newName}` });
     }
   }
   const newUri = renamedFileUri(symbol.uri, newName);

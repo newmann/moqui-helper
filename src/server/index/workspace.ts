@@ -58,6 +58,7 @@ export interface InterfaceParameter {
   name: string;
   type: string;
   required: boolean;
+  description?: string;
   children: InterfaceParameter[];
   uri?: string;
   nameRange?: Range;
@@ -66,6 +67,7 @@ export interface InterfaceParameter {
 export interface ServiceInterface {
   inputs: InterfaceParameter[];
   outputs: InterfaceParameter[];
+  description?: string;
 }
 
 export class WorkspaceIndex {
@@ -154,7 +156,7 @@ export class WorkspaceIndex {
       ...extractServices(scan, fsPath, uri, this.components()),
       ...extractScreens(scan, fsPath, uri, this.components()),
     ];
-    const models = extractEntityModels(scan, uri);
+    const models = extractEntityModels(scan, uri, text);
     const entry: FileEntry = {
       uri,
       fsPath,
@@ -171,7 +173,7 @@ export class WorkspaceIndex {
       facadeTags: collectFacadeTags(scan, uri, fsPath),
       bases: models.bases,
       extensions: models.extensions,
-      serviceModels: extractServiceModels(scan, fsPath, uri, this.components()),
+      serviceModels: extractServiceModels(scan, fsPath, uri, this.components(), text),
       packages: extractPackages(scan),
     };
     this.files.set(key, entry);
@@ -746,7 +748,12 @@ export class WorkspaceIndex {
         }
       }
     }
-    return { fields, relationships, noUpdateStamp };
+    return {
+      fields,
+      relationships,
+      noUpdateStamp,
+      ...(base?.description ? { description: base.description } : {}),
+    };
   }
 
   private resolveMemberEntity(
@@ -810,7 +817,11 @@ export class WorkspaceIndex {
         appendMissing(outputs, outputNames, copyParameters(face.outputs, inherited.required));
       }
     }
-    return { inputs, outputs };
+    return {
+      inputs,
+      outputs,
+      ...(model.description ? { description: model.description } : {}),
+    };
   }
 
   private expandMembers(members: ServiceMember[]): InterfaceParameter[] {
@@ -823,6 +834,7 @@ export class WorkspaceIndex {
         name: member.name,
         type: member.type,
         required: member.required,
+        ...(member.description ? { description: member.description } : {}),
         children: this.expandMembers(member.children),
         uri: member.uri,
         nameRange: member.nameRange,
@@ -842,6 +854,7 @@ export class WorkspaceIndex {
           name: field.name,
           type: field.type,
           required: field.isPk,
+          ...(field.description ? { description: field.description } : {}),
           children: [],
           uri: field.uri,
           nameRange: field.nameRange,
@@ -1039,6 +1052,7 @@ function copyParameters(parameters: InterfaceParameter[], required: boolean | un
     name: parameter.name,
     type: parameter.type,
     required: required === undefined ? parameter.required : required,
+    ...(parameter.description ? { description: parameter.description } : {}),
     children: copyParameters(parameter.children, required),
     uri: parameter.uri,
     nameRange: parameter.nameRange,

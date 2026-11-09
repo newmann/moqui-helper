@@ -56,7 +56,6 @@ export function isComponentXmlPath(filePath: string): boolean {
   const posix = toPosix(filePath);
   return (
     /(?:^|\/)framework\/component\.xml$/.test(posix) ||
-    /(?:^|\/)runtime\/base-component\/[^/]+\/component\.xml$/.test(posix) ||
-    /(?:^|\/)runtime\/component\/[^/]+\/component\.xml$/.test(posix)
+    /(?:^|\/)runtime\/(?:base-component|dev-component|component)\/[^/]+\/component\.xml$/.test(posix)
   );
 }

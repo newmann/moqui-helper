@@ -11,6 +11,7 @@ export const XML_FILE_ASSOCIATIONS: readonly XmlFileAssociation[] = [
   { pattern: 'secas', systemId: `${SCHEMA}/service-eca-3.xsd` },
   { pattern: 'eecas', systemId: `${SCHEMA}/entity-eca-3.xsd` },
   { pattern: 'emecas', systemId: `${SCHEMA}/email-eca-3.xsd` },
+  { pattern: 'gitecas', systemId: `${SCHEMA}/git-eca-3.xsd` },
   { pattern: 'screen', systemId: `${SCHEMA}/xml-screen-3.xsd` },
   { pattern: 'screen-extend', systemId: `${SCHEMA}/xml-screen-3.xsd` },
   { pattern: 'moqui-conf', systemId: `${SCHEMA}/moqui-conf-3.xsd` },

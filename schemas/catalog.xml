@@ -15,6 +15,9 @@
     <system systemId="http://moqui.org/xsd/entity-facade-xml-3.xsd" uri="entity-facade-xml-3.xsd"/>
     <uri name="http://moqui.org/xsd/entity-facade-xml-3.xsd" uri="entity-facade-xml-3.xsd"/>
 
+    <system systemId="http://moqui.org/xsd/git-eca-3.xsd" uri="git-eca-3.xsd"/>
+    <uri name="http://moqui.org/xsd/git-eca-3.xsd" uri="git-eca-3.xsd"/>
+
     <system systemId="http://moqui.org/xsd/moqui-conf-3.xsd" uri="moqui-conf-3.xsd"/>
     <uri name="http://moqui.org/xsd/moqui-conf-3.xsd" uri="moqui-conf-3.xsd"/>
 

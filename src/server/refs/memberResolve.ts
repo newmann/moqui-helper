@@ -4,7 +4,7 @@ import { ScreenMember, memberId, sameMember } from '../index/screenMembers';
 import { WorkspaceIndex } from '../index/workspace';
 import { Range, SymbolRecord } from '../types';
 import { MemberRef } from './classify';
-import { resolveScreenLocation } from './resolve';
+import { resolveRuntimeScreenPath, resolveScreenLocation } from './resolve';
 
 export interface MemberQuery {
   role: MemberRef['role'];
@@ -34,6 +34,10 @@ export function resolveMemberRef(ref: MemberQuery, fromFsPath: string, index: Wo
   switch (ref.role) {
     case 'transition':
       return resolveTransition(ref, fromFsPath, index);
+    case 'url-name':
+      return resolveUrlName(ref, fromFsPath, index);
+    case 'screen-path':
+      return resolveScreenPath(ref, fromFsPath, index);
     case 'transition-include':
       return resolveIncludedTransition(ref, fromFsPath, index);
     case 'section':
@@ -175,6 +179,139 @@ function resolveTransition(ref: MemberQuery, fromFsPath: string, index: Workspac
   return missing(ref, 'unresolvedTransition');
 }
 
+const BUILTIN_TRANSITIONS = new Set(['actions', 'formSelectColumns', 'formSaveFind', 'screenDoc']);
+
+function resolveUrlName(ref: MemberQuery, fromFsPath: string, index: WorkspaceIndex): MemberResolveResult {
+  const first = ref.lookup[0] ?? '';
+  if (first >= 'a' && first <= 'z') {
+    const locals = index
+      .screenScope(fromFsPath)
+      .filter((member) => member.kind === 'transition' && member.name === ref.lookup);
+    if (locals.length > 0) {
+      return memberResult(ref, locals);
+    }
+    if (BUILTIN_TRANSITIONS.has(ref.lookup)) {
+      return { status: 'skip' };
+    }
+    return missing(ref, 'unresolvedTransition');
+  }
+  if (first >= 'A' && first <= 'Z') {
+    const item = index.screenScope(fromFsPath).find(
+      (member) => member.kind === 'subscreens-item' && member.name === ref.lookup,
+    );
+    if (item) {
+      if (item.location && !item.location.includes('${')) {
+        const resolved = resolveScreenLocation(item.location, item.fsPath, index);
+        if (resolved.status === 'ok' && resolved.records.length > 0) {
+          return screenResult(resolved.records);
+        }
+      }
+      return { status: 'ok', targets: [{ type: 'member', member: item }], exclusive: true };
+    }
+    const nested = screensInMatchingDirectory(ref.lookup, fromFsPath, index);
+    if (nested.length > 0) {
+      return screenResult(nested);
+    }
+    return missing(ref, 'unresolvedScreen');
+  }
+  return { status: 'skip' };
+}
+
+function resolveScreenPath(ref: MemberQuery, fromFsPath: string, index: WorkspaceIndex): MemberResolveResult {
+  if (isRemotePath(ref.lookup)) {
+    return { status: 'skip' };
+  }
+  if (isDotScreenPath(ref.lookup)) {
+    const resolved = resolveRuntimeScreenPath(ref.lookup, fromFsPath, index);
+    if (resolved.status === 'skip') {
+      return { status: 'skip' };
+    }
+    if (resolved.status === 'ok') {
+      return screenResult(resolved.records);
+    }
+    return missing(ref, 'unresolvedScreen');
+  }
+  if (isLocationForm(ref.lookup)) {
+    const resolved = resolveScreenLocation(ref.lookup, fromFsPath, index);
+    if (resolved.status === 'skip') {
+      return { status: 'skip' };
+    }
+    if (resolved.status === 'ok') {
+      return screenResult(resolved.records);
+    }
+    return missing(ref, 'unresolvedScreen');
+  }
+  if (ref.lookup.includes('/') || ref.lookup.includes('\\')) {
+    const absolute = path.normalize(path.resolve(path.dirname(fromFsPath), ref.lookup));
+    const screens = screensAt(absolute, index);
+    if (screens.length > 0) {
+      return screenResult(screens);
+    }
+    return missing(ref, 'unresolvedScreen');
+  }
+  const child = path.normalize(path.join(path.dirname(fromFsPath), `${ref.lookup}.xml`));
+  const screens = index.findScreensByPath(child);
+  if (screens.length > 0) {
+    return screenResult(screens);
+  }
+  const item = index.screenScope(fromFsPath).find(
+    (member) => member.kind === 'subscreens-item' && member.name === ref.lookup,
+  );
+  if (item) {
+    if (item.location && !item.location.includes('${')) {
+      const resolved = resolveScreenLocation(item.location, item.fsPath, index);
+      if (resolved.status === 'ok' && resolved.records.length > 0) {
+        return screenResult(resolved.records);
+      }
+    }
+    return { status: 'ok', targets: [{ type: 'member', member: item }], exclusive: true };
+  }
+  if (isDirectory(path.join(path.dirname(fromFsPath), ref.lookup))) {
+    return { status: 'skip' };
+  }
+  const nested = screensInMatchingDirectory(ref.lookup, fromFsPath, index);
+  if (nested.length > 0) {
+    return screenResult(nested);
+  }
+  if (matchingDirectoryHas(ref.lookup, fromFsPath, index)) {
+    return { status: 'skip' };
+  }
+  return missing(ref, 'unresolvedScreen');
+}
+
+function screenResult(records: SymbolRecord[]): MemberResolveResult {
+  return {
+    status: 'ok',
+    targets: records.map((record) => ({ type: 'screen', record })),
+    exclusive: records.length === 1,
+  };
+}
+
+function screensAt(absolute: string, index: WorkspaceIndex): SymbolRecord[] {
+  const direct = index.findScreensByPath(absolute);
+  if (direct.length > 0) {
+    return direct;
+  }
+  if (!absolute.toLowerCase().endsWith('.xml')) {
+    return index.findScreensByPath(`${absolute}.xml`);
+  }
+  return [];
+}
+
+function isRemotePath(value: string): boolean {
+  return value.startsWith('http://') || value.startsWith('https://') || value.startsWith('content:');
+}
+
+function isDotScreenPath(value: string): boolean {
+  const query = value.indexOf('?');
+  const target = (query < 0 ? value : value.slice(0, query)).trim();
+  return target.startsWith('.');
+}
+
+function isLocationForm(value: string): boolean {
+  return value.startsWith('component://') || value.startsWith('.') || value.startsWith('//');
+}
+
 function resolveIncludedTransition(ref: MemberQuery, fromFsPath: string, index: WorkspaceIndex): MemberResolveResult {
   if (!ref.location) {
     return { status: 'skip' };
@@ -230,6 +367,10 @@ function resolveDefaultItem(ref: MemberQuery, fromFsPath: string, index: Workspa
     return memberResult(ref, items);
   }
   if (!looksLikePath(ref.lookup)) {
+    const nested = screensInMatchingDirectory(ref.lookup, fromFsPath, index);
+    if (nested.length > 0) {
+      return screenResult(nested);
+    }
     return missing(ref, 'unresolvedSubscreensItem');
   }
   const resolved = resolveScreenLocation(ref.lookup, fromFsPath, index);

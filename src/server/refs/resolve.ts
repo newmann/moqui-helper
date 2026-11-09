@@ -92,6 +92,33 @@ export function resolveRef(ref: ClassifiedRef, fromFsPath: string, index: Worksp
   return resolveScreen(ref, fromFsPath, index);
 }
 
+export function screenFileBase(fromFsPath: string): string {
+  return fromFsPath.toLowerCase().endsWith('.xml') ? fromFsPath.slice(0, -4) : fromFsPath;
+}
+
+export function resolveRuntimeScreenPath(
+  url: string,
+  fromFsPath: string,
+  index: WorkspaceIndex,
+): { status: 'skip' } | { status: 'ok'; records: SymbolRecord[] } | { status: 'missing' } {
+  const query = url.indexOf('?');
+  const target = (query < 0 ? url : url.slice(0, query)).trim();
+  if (!target || target.includes('${') || isHereOrParent(target)) {
+    return { status: 'skip' };
+  }
+  if (!fromFsPath) {
+    return { status: 'missing' };
+  }
+  const absolute = path.normalize(path.resolve(screenFileBase(fromFsPath), target));
+  const records = lookupScreenFile(absolute, index);
+  return records.length > 0 ? { status: 'ok', records } : { status: 'missing' };
+}
+
+function isHereOrParent(target: string): boolean {
+  const trimmed = target.replace(/\/+$/, '');
+  return trimmed === '.' || trimmed === '..';
+}
+
 export function resolveScreenLocation(
   location: string,
   fromFsPath: string,

@@ -73,7 +73,7 @@ describe('readRootTag', () => {
       seenColors.add(kind.colorId);
       assert.equal(colors.get(kind.colorId), `%${kind.colorKey}%`);
     }
-    assert.equal(seenColors.size, 11);
+    assert.equal(seenColors.size, 12);
   });
 });
 

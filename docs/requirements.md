@@ -26,7 +26,7 @@
 
 ## 支持的 XML 根标签
 
-`entities`、`services`、`secas`、`eecas`、`emecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。这些根在资源管理器里用徽章区分。
+`entities`、`services`、`secas`、`eecas`、`emecas`、`gitecas`、`screen`、`screen-extend`、`moqui-conf`、`resource`、`component`、`widget-templates`、`entity-facade-xml`。这些根在资源管理器里用徽章区分。
 
 标签和属性的结构以 Moqui 3 的 `*-3.xsd` 为准。实体名、服务名、screen location 等跨文件引用不在 XSD 枚举里，由语言服务自己的索引提供。
 

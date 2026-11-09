@@ -19,7 +19,7 @@ P0–P3 以 [requirements.md](requirements.md) 为准，并且已经落地。本
   - 表单、`dynamic-container`、`dynamic-dialog`、`dynamic-options` 的 `transition`。指向本屏 transition，或下一级 screen
   - `section-include` 的 `name`，以及 location 里 `#` 后面的 section
   - `form-single` / `form-list` 的 `extends`：本文件 form 名，或 `文件#form`
-  - `subscreens` 的 `default-item`：本屏 `subscreens-item`，或相对路径 screen
+  - `subscreens` 的 `default-item`：本屏 `subscreens-item`，同名目录下的 screen 文件名，或相对路径 screen
   - `field-ref`，以及 `form-single` 的 `focus-field`
 - `transition`、`transition-include` 的定义上显示引用次数
 - 悬停 `section`
@@ -63,19 +63,27 @@ P0–P3 以 [requirements.md](requirements.md) 为准，并且已经落地。本
 
 ## P7：其余 location 与 widget-template
 
-沿用 screen location 的路径规则（`component://`、相对路径、`//` 简写）。动态路径不报未解析。
+沿用 screen location 的路径规则（`component://`、相对路径、`//` 简写）。这些 location 里的动态路径不报未解析。
 
 - `widget-template-include@location`
 - `load-data`、`load-entity` 的 `location`
-- `link`、`image`、`att-list-response` 的 `url`
+- `image`、`att-list-response` 的 `url`。仍按文件路径，不套用下面的名字规则
 - `screen` 的 `menu-image`、`screen-text-output` 的宏模板、`resource` 的 `xml-actions-template-location`、组件样式 location
 - `widget-template` 定义上的引用次数。引用来自 `widget-template-include`
 - 补全触发字符加上 `/`
+
+`link`、`default-response`、`conditional-response`、`error-response` 的 `url`，在 `url-type` 为 `transition`、`screen` 或 `screen-path`（含默认值）时：
+
+- 带路径分隔符，或以 `.`、`//`、`component://` 开头：仍是文件路径。写死且对不上文件报未解析
+- 没有路径分隔符：首字母小写是本屏 transition（含 `transition-include`），大写是当前 screen 目录下的 screen 或 `subscreens-item`。写死且对不上报未解析。同级 screen 用 `../Name`
+- 值里含 `${`：不跳转、不悬停、不补全，给出 warning
 
 验收：
 
 - 上述路径能补全、跳到文件
 - 明确写死且对不上文件时报未解析
+- 无分隔符的 screen url 能补全、跳到 transition 或下一级 screen；写死且对不上报未解析
+- 含 `${` 的这些 url 给出 warning，不跳转、不悬停、不补全
 - widget-template 显示引用次数
 - 输入 `/` 时在这些属性里弹出补全
 

@@ -59,29 +59,23 @@ along with this software (see the LICENSE.md file). If not, see
             <xs:attribute name="type" default="inline">
                 <xs:annotation><xs:documentation>
                     The service type specifies how the service is implemented. Additional types can be added by
-                    implementing the org.moqui.impl.service.ServiceRunner interface and adding an
-                    service-facade.service-type element in the Moqui Conf XML file. The default value is inline
+                    linking a native runner implementation and adding a service-facade.service-type
+                    element in the Moqui Conf XML file. Service definitions remain in this XML. The default value is inline
                     meaning the service implementation is under the service.actions element.
                 </xs:documentation></xs:annotation>
                 <xs:simpleType>
-                    <xs:restriction base="xs:token">
-                        <xs:enumeration value="inline"/>
-                        <xs:enumeration value="entity-auto"/>
-                        <xs:enumeration value="script"/>
-                        <xs:enumeration value="java"/>
-                        <xs:enumeration value="interface"/>
-                        <xs:enumeration value="remote-json-rpc"/>
-                        <xs:enumeration value="remote-rest"/>
-                        <xs:enumeration value="camel"/>
-                    </xs:restriction>
+                    <xs:restriction base="xs:token"><xs:minLength value="1"/></xs:restriction>
                 </xs:simpleType>
             </xs:attribute>
             <xs:attribute name="location" type="xs:string" use="optional">
                 <xs:annotation><xs:documentation>The location of the service. For scripts this is the Resource Facade
-                    location of the file. For Java class methods this is the full class name. For remote services this
-                    is the URL of the remote service. Instead of an actual location can also refer to a pre-defined
-                    location from the service-facade.service-location element in the Moqui Conf XML file. This is
-                    especially useful for remote service URLs.</xs:documentation></xs:annotation>
+                    location of the file. For Java class methods this is the full class name. For rust services this
+                    is the Rust path of the registered function, such as moqui_core::service::mail::send_template,
+                    or for a linked component crate the identifier its catalogue or a tool factory binds, such as
+                    example::services::echo.
+                    For remote services this is the URL of the remote service. Instead of an actual location can also
+                    refer to a pre-defined location from the service-facade.service-location element in the Moqui Conf
+                    XML file. This is especially useful for remote service URLs.</xs:documentation></xs:annotation>
             </xs:attribute>
             <xs:attribute name="method" type="xs:string" use="optional">
                 <xs:annotation><xs:documentation>The method within the location, if applicable to the service type.</xs:documentation></xs:annotation>
@@ -125,9 +119,10 @@ along with this software (see the LICENSE.md file). If not, see
                 </xs:simpleType>
             </xs:attribute>
             <xs:attribute name="allow-remote" type="boolean" default="false">
-                <xs:annotation><xs:documentation>Defaults to false meaning this service cannot be called through remote
-                    interfaces such as JSON-RPC and XML-RPC. If set to true it can be. Before settings to true make sure
-                    the service is adequately secured (for authentication and authorization).</xs:documentation></xs:annotation>
+                <xs:annotation><xs:documentation>Kept for compatibility; nothing reads it. There is no general remote
+                    service interface (no JSON-RPC or XML-RPC). Services are called remotely only through REST API
+                    definitions (rest-api files), and agent tools over A2A and MCP only when an AgentToolExposure record
+                    opts them in; each of these has its own authentication and authorization.</xs:documentation></xs:annotation>
             </xs:attribute>
             <xs:attribute name="validate" type="boolean" default="true">
                 <xs:annotation><xs:documentation>Defaults to true. Set to false to not validate input parameters, and
@@ -154,6 +149,11 @@ along with this software (see the LICENSE.md file). If not, see
             </xs:attribute>
             <xs:attribute name="no-tx-cache" type="boolean" default="false"><xs:annotation><xs:documentation>
                 If true and a TransactionCache is active flush and remove it before calling the service.</xs:documentation></xs:annotation></xs:attribute>
+            <xs:attribute name="read-only" type="boolean" default="false"><xs:annotation><xs:documentation>
+                The service writes nothing and sends nothing: it only reads, and may set values in the user's context. A
+                server-static screen may call it in its always-actions and pre-actions, which the form request runs
+                again (moqui lint --screens --qvt-static). A get, find or setup verb is taken as read-only too. MR Moqui
+                only; Java Moqui ignores it.</xs:documentation></xs:annotation></xs:attribute>
 
             <!-- not supported by Atomikos/etc right now, consider for later:
             <xs:attribute name="transaction-isolation" type="isolation-level" use="optional">
@@ -194,6 +194,22 @@ along with this software (see the LICENSE.md file). If not, see
                     The name of a parameter to use for distinct semaphores for the same services.
                     The parameter should be required in the service, though a single null semaphore is supported.
                     This should not be used for IDs of transactional records, better to lock directly on those records (find with for update).
+                </xs:documentation></xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="operation" type="xs:string">
+                <xs:annotation><xs:documentation>
+                    MR Moqui only. The stable name of the business operation a call of this service is when it owns
+                    its transaction (the outermost or a force-new one): the moqui.operation.runs and
+                    moqui.operation.duration metrics count it by this name and its outcome (commit, rollback, retry,
+                    pending). Defaults to the service name; telemetry/operations in the conf may rename or limit
+                    operations. A service with transaction="ignore" owns no transaction and records no operation.
+                </xs:documentation></xs:annotation>
+            </xs:attribute>
+            <xs:attribute name="operation-ref" type="xs:string">
+                <xs:annotation><xs:documentation>
+                    MR Moqui only. The in-parameter whose value is the operation's correlation reference, recorded on
+                    the service's span as moqui.operation.ref (parameter:value), never as a metric label. Name an id,
+                    such as orderId, never a parameter that carries document contents.
                 </xs:documentation></xs:annotation>
             </xs:attribute>
         </xs:complexType>

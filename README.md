@@ -18,7 +18,7 @@ The Extension Development Host does not install extension dependencies. Install 
 
 ## What it covers
 
-- Structure: local Moqui 3 schemas for `entities`, `services`, `secas`, `eecas`, `emecas`, `screen`, `screen-extend`, `moqui-conf`, `resource`, `component`, `widget-templates`, and `entity-facade-xml`.
+- Structure: local Moqui 3 schemas for `entities`, `services`, `secas`, `eecas`, `emecas`, `gitecas`, `screen`, `screen-extend`, `moqui-conf`, `resource`, `component`, `widget-templates`, and `entity-facade-xml`.
 - Cross-file names: entities, services, and screen locations, with completion, go to definition, hover, find references, rename, reference counts, and unresolved diagnostics.
 - Names inside a file: screen transitions, sections, forms, and subscreens items; entity fields, relationships, and view-entity aliases; service includes, interfaces, and in-parameters.
 - File locations such as widget-template includes, `load-data`, and `link` URLs. A `#` fragment that names a section or form is checked.
@@ -30,7 +30,7 @@ Groovy injection, an admin tool window, and a custom project view grouped by ent
 
 ## Structural completion and diagnostics
 
-This extension maps `http://moqui.org/xsd/*-3.xsd` through `schemas/catalog.xml` to the XSD files in the same directory. A root `xsi:noNamespaceSchemaLocation` is resolved by the catalog. Without that attribute, the root tag selects the schema: `entities`, `services`, `secas`, `eecas`, `emecas`, `screen`, `screen-extend`, `moqui-conf`, `resource`, `component`, `widget-templates`, `entity-facade-xml`.
+This extension maps `http://moqui.org/xsd/*-3.xsd` through `schemas/catalog.xml` to the XSD files in the same directory. A root `xsi:noNamespaceSchemaLocation` is resolved by the catalog. Without that attribute, the root tag selects the schema: `entities`, `services`, `secas`, `eecas`, `emecas`, `gitecas`, `screen`, `screen-extend`, `moqui-conf`, `resource`, `component`, `widget-templates`, `entity-facade-xml`.
 
 ## Cross-file names
 
@@ -67,6 +67,7 @@ When the workspace root contains `MoquiInit.properties` or `moq`, these Moqui XM
 | `secas` | Se | Service ECAs |
 | `eecas` | Ee | Entity ECAs |
 | `emecas` | Em | Email ECAs |
+| `gitecas` | Ge | Git ECAs |
 | `screen` | Sc | Screen |
 | `screen-extend` | Sx | Screen extend |
 | `moqui-conf` | Cf | Moqui configuration |

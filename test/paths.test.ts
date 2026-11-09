@@ -24,6 +24,8 @@ const editPath = path.join(mantleRoot, 'screen', 'Edit.xml');
 const findPath = path.join(mantleRoot, 'screen', 'Find.xml');
 const templatePath = path.join(mantleRoot, 'template', 'PartyForms.xml');
 const securityPath = path.join(root, 'runtime', 'base-component', 'tools', 'screen', 'System', 'Security.xml');
+const demoRoot = path.join(root, 'runtime', 'dev-component', 'demo');
+const demoScreen = path.join(demoRoot, 'screen', 'Home.xml');
 const macroPath = path.join(root, 'template', 'Macro.ftl');
 
 const templateText = '<widget-templates><widget-template name="Party"><label text="Hi"/></widget-template></widget-templates>';
@@ -49,6 +51,8 @@ write(findPath, '<screen></screen>');
 write(editPath, editText);
 write(templatePath, templateText);
 write(securityPath, '<screen></screen>');
+write(path.join(demoRoot, 'component.xml'), '<component name="demo"/>');
+write(demoScreen, '<screen></screen>');
 write(macroPath, 'macro');
 
 function indexed(): WorkspaceIndex {
@@ -59,6 +63,8 @@ function indexed(): WorkspaceIndex {
   index.replaceFile(fsPathToUri(editPath), editPath, editText);
   index.replaceFile(fsPathToUri(templatePath), templatePath, templateText);
   index.replaceFile(fsPathToUri(securityPath), securityPath, '<screen></screen>');
+  index.replaceFile(fsPathToUri(path.join(demoRoot, 'component.xml')), path.join(demoRoot, 'component.xml'), '<component name="demo"/>');
+  index.replaceFile(fsPathToUri(demoScreen), demoScreen, '<screen></screen>');
   return index;
 }
 
@@ -92,6 +98,15 @@ describe('path locations', () => {
 
     const names = labelsAt('<widget-template-include location="component://mantle/template/PartyForms.xml#"/>', index);
     assert.ok(names.includes('Party'));
+  });
+
+  it('resolves a component stored under runtime/dev-component by name', () => {
+    assert.ok(labelsAt('<link url="component://demo/"/>', index).includes('component://demo/screen/'));
+
+    const location = '<load-entity location="component://demo/screen/Home.xml"/>';
+    const defs = definitionAt(location, location.indexOf('component://') + 4, editPath, index);
+    assert.equal(defs?.length, 1);
+    assert.equal(pathKey(uriToFsPath(defs?.[0].uri ?? '')), pathKey(demoScreen));
   });
 
   it('jumps a written path to the file and a template name to its definition', () => {
@@ -163,6 +178,43 @@ describe('path locations', () => {
     const text = '<service verb="get" noun="Party" location="component://mantle/screen/Find.xml"/>';
     const offset = text.indexOf('mantle/') + 'mantle/'.length;
     assert.equal(completionAt(text, offset, index, editPath), null);
+  });
+
+  it('resolves a screen url from the current screen name', () => {
+    const homePath = path.join(mantleRoot, 'screen', 'Projects', 'Home.xml');
+    const mergePath = path.join(mantleRoot, 'screen', 'Projects', 'Code', 'MergeRequests.xml');
+    write(homePath, '<screen></screen>');
+    write(mergePath, '<screen></screen>');
+    index.replaceFile(fsPathToUri(homePath), homePath, '<screen></screen>');
+    index.replaceFile(fsPathToUri(mergePath), mergePath, '<screen></screen>');
+
+    const link = '<screen><link url="../Code/MergeRequests"/></screen>';
+    const defs = definitionAt(link, link.indexOf('../'), homePath, index);
+    assert.equal(pathKey(uriToFsPath(defs?.[0].uri ?? '')), pathKey(mergePath));
+
+    const queried = '<screen><link url="../Code/MergeRequests?list=waiting"/></screen>';
+    const queriedDefs = definitionAt(queried, queried.indexOf('../'), homePath, index);
+    assert.equal(pathKey(uriToFsPath(queriedDefs?.[0].uri ?? '')), pathKey(mergePath));
+
+    const response = '<transition><default-response url="../Code/MergeRequests"/></transition>';
+    const responseDefs = definitionAt(response, response.indexOf('../'), homePath, index);
+    assert.equal(pathKey(uriToFsPath(responseDefs?.[0].uri ?? '')), pathKey(mergePath));
+
+    const text = [
+      '<screen>',
+      '  <link url="../Code/MergeRequests"/>',
+      '  <link url="../Code/MergeRequests?list=waiting"/>',
+      '  <link url="/qapps/Projects/Code/MergeRequestDetail" url-type="plain"/>',
+      '  <default-response url="../Missing/Screen"/>',
+      '</screen>',
+    ].join('\n');
+    assert.deepEqual(
+      collectDiagnostics(text, homePath, index, messages).map((item) => item.message),
+      ['missing file ../Missing/Screen'],
+    );
+
+    assert.ok(labelsAt('<link url="../Code/"/>', index, homePath).includes('../Code/MergeRequests'));
+    assert.ok(labelsAt('<image url="./"/>', index, editPath).includes('./Find.xml'));
   });
 
   it('counts widget-template includes on the template name', () => {

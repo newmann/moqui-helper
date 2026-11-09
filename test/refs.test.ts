@@ -33,6 +33,7 @@ const messages: Messages = {
   hoverNone: 'none',
   hoverColumnName: 'name',
   hoverColumnType: 'type',
+  hoverColumnDescription: 'description',
   hoverYes: 'yes',
 };
 
@@ -80,6 +81,55 @@ function hoverValue(hover: Hover | null): string {
 }
 
 describe('references', () => {
+  it('resolves services, entities, and screen locations added with the schema update', () => {
+    const index = indexed();
+    const text = [
+      '<screen>',
+      '  <inbox-source name="boss.internal" service="mantle.party.PartyServices.get#Party"/>',
+      '  <today-source service="missing.Service.get#Nope"/>',
+      '  <context record-entity="mantle.party.Party"/>',
+      '  <context record-entity="${order}"/>',
+      '  <assist-prompt label="A" text="B" entity="parties"/>',
+      '</screen>',
+    ].join('\n');
+    assert.deepEqual(
+      collectDiagnostics(text, editPath, index, messages).map((item) => item.message),
+      ['missing service missing.Service.get#Nope'],
+    );
+    const serviceAt = text.indexOf('service="mantle.party.PartyServices.get#Party"') + 'service="'.length;
+    assert.equal(definitionAt(text, serviceAt, editPath, index)?.[0].uri, 'file:///services.xml');
+    const entityAt = text.indexOf('record-entity="mantle.party.Party"') + 'record-entity="'.length;
+    assert.equal(definitionAt(text, entityAt, editPath, index)?.[0].uri, 'file:///party.xml');
+    const aliasAt = text.indexOf('entity="parties"') + 'entity="'.length;
+    assert.equal(definitionAt(text, aliasAt, editPath, index)?.[0].uri, 'file:///party.xml');
+
+    const conf = [
+      '<moqui-conf>',
+      '  <webapp name="webroot">',
+      '    <public-site host="example.test" site-id="site" screen-location="component://tools/screen/System/Security.xml" resolver-service="mantle.party.PartyServices.get#Party">',
+      '      <mount path="/" screen="component://mantle/screen/Find.xml"/>',
+      '      <mount path="/bare" screen="Home"/>',
+      '    </public-site>',
+      '  </webapp>',
+      '  <delegate service="mantle.party.PartyServices.get#Party"/>',
+      '  <queue-kind name="sync" service="missing.Service.get#Queue" failed-service="mantle.party.PartyServices.get#Party"/>',
+      '  <replicate set="party"><entity name="mantle.party.Party"/></replicate>',
+      '  <replicate set="dyn"><entity name="${entity}"/></replicate>',
+      '  <telemetry><operations><operation service=".*"/></operations></telemetry>',
+      '</moqui-conf>',
+    ].join('\n');
+    assert.deepEqual(
+      collectDiagnostics(conf, editPath, index, messages).map((item) => item.message),
+      ['missing service missing.Service.get#Queue'],
+    );
+    const locationAt = conf.indexOf('component://tools/screen/System/Security.xml');
+    assert.equal(definitionAt(conf, locationAt, editPath, index)?.[0].uri, 'file:///security.xml');
+    const mountAt = conf.indexOf('component://mantle/screen/Find.xml');
+    assert.equal(definitionAt(conf, mountAt, editPath, index)?.[0].uri, 'file:///find.xml');
+    const replicaAt = conf.indexOf('<entity name="mantle.party.Party"') + '<entity name="'.length;
+    assert.equal(definitionAt(conf, replicaAt, editPath, index)?.[0].uri, 'file:///party.xml');
+  });
+
   it('resolves entities, services, crud, and screen locations', () => {
     const index = indexed();
     const text = [
@@ -282,8 +332,15 @@ describe('references', () => {
       [
         '<entities>',
         '  <entity entity-name="Party" package="mantle.party">',
-        '    <field name="partyId" type="id" is-pk="true"/>',
-        '    <field name="statusId" type="id"/>',
+        '    <description>',
+        '      A &amp; party',
+        '    </description>',
+        '    <field name="partyId" type="id" is-pk="true">',
+        '      <description>',
+        '        Primary &amp; id',
+        '      </description>',
+        '    </field>',
+        '    <field name="statusId" type="id"><description>Current status</description></field>',
         '    <relationship type="many" related="mantle.party.Contact" short-alias="contacts">',
         '      <key-map field-name="partyId"/>',
         '    </relationship>',
@@ -303,15 +360,19 @@ describe('references', () => {
         '    <in-parameters>',
         '      <parameter name="partyId" type="id" required="true"/>',
         '      <parameter name="info" type="Map">',
-        '        <parameter name="note"/>',
+        '        <description>Party info</description>',
+        '        <parameter name="note"><description>A note</description></parameter>',
         '      </parameter>',
         '    </in-parameters>',
         '    <out-parameters>',
         '      <parameter name="partyId" type="id"/>',
-        '      <parameter name="resultCount"/>',
+        '      <parameter name="resultCount"><description>Row count</description></parameter>',
         '    </out-parameters>',
         '  </service>',
         '  <service verb="get" noun="Party">',
+        '    <description>',
+        '      Load a party',
+        '    </description>',
         '    <implements service="mantle.party.PartyServices.store#Party" required="true"/>',
         '    <in-parameters>',
         '      <parameter name="partyId" required="false"/>',
@@ -343,15 +404,17 @@ describe('references', () => {
       [
         'entity mantle.party.Party',
         '',
+        'A & party',
+        '',
         'fields',
         '',
         '```',
-        '┌──────────┬──────┬─────┐',
-        '│ name     │ type │ pk  │',
-        '├──────────┼──────┼─────┤',
-        '│ partyId  │ id   │ yes │',
-        '│ statusId │ id   │     │',
-        '└──────────┴──────┴─────┘',
+        '┌──────────┬──────┬─────┬────────────────┐',
+        '│ name     │ type │ pk  │ description    │',
+        '├──────────┼──────┼─────┼────────────────┤',
+        '│ partyId  │ id   │ yes │ Primary & id   │',
+        '│ statusId │ id   │     │ Current status │',
+        '└──────────┴──────┴─────┴────────────────┘',
         '```',
         '',
         'relationships',
@@ -365,15 +428,17 @@ describe('references', () => {
       [
         'service mantle.party.PartyServices.get#Party',
         '',
+        'Load a party',
+        '',
         'in',
         '- partyId: String',
-        '- statusId: id',
-        '- info: Map required',
-        '  - note: String required',
+        '- statusId: id — Current status',
+        '- info: Map required — Party info',
+        '  - note: String required — A note',
         '',
         'out',
         '- partyId: id required',
-        '- resultCount: String required',
+        '- resultCount: String required — Row count',
       ].join('\n'),
     );
 

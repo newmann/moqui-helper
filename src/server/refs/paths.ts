@@ -6,11 +6,15 @@ import type { WorkspaceIndex } from '../index/workspace';
 import { fsPathToUri, isInside, pathKey, toPosix } from '../paths';
 import { Range } from '../types';
 import { attribute, decodeEntities, ScanAttribute, ScanElement, scanXml } from '../xml/scan';
-import { mapBaseLocation, resolveResourceLocation } from './resolve';
+import { omitScreenUrlPath } from './classify';
+import { mapBaseLocation, resolveResourceLocation, resolveRuntimeScreenPath, screenFileBase } from './resolve';
 
 const LOCATION_TAGS = new Set(['load-data', 'load-entity', 'macro-template']);
 const URL_TAGS = new Set(['link', 'image', 'default-response', 'conditional-response', 'error-response']);
+const SCREEN_URL_TAGS = new Set(['link', 'default-response', 'conditional-response', 'error-response']);
 const SHORTHAND_HEADS = ['system', 'tools', 'apps', 'qapps'];
+
+export type PathResolve = 'file' | 'screen' | 'plain';
 
 export interface PathRef {
   lookup: string;
@@ -19,6 +23,7 @@ export interface PathRef {
   endOffset: number;
   dynamic: boolean;
   templateInclude: boolean;
+  resolve: PathResolve;
   fragment?: string;
   fragmentRange?: Range;
   fragmentStart?: number;
@@ -58,7 +63,7 @@ export function collectPathRefs(text: string): PathRef[] {
     if (!spec) {
       continue;
     }
-    refs.push(pathRef(spec.attribute, scan.positionAt, spec.templateInclude));
+    refs.push(pathRef(spec.attribute, scan.positionAt, spec.templateInclude, spec.resolve));
   }
   return refs;
 }
@@ -139,8 +144,19 @@ export function pathDefinition(hit: PathHit, fromFsPath: string, index: Workspac
   return [{ uri, range: { start: origin, end: origin } }];
 }
 
-export function pathLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex): PathLabel[] {
-  if (prefix.includes('${') || prefix.startsWith('http://') || prefix.startsWith('https://') || prefix.startsWith('content:')) {
+export function pathLabels(
+  prefix: string,
+  fromFsPath: string,
+  index: WorkspaceIndex,
+  resolve: PathResolve = 'file',
+): PathLabel[] {
+  if (
+    resolve === 'plain' ||
+    prefix.includes('${') ||
+    prefix.startsWith('http://') ||
+    prefix.startsWith('https://') ||
+    prefix.startsWith('content:')
+  ) {
     return [];
   }
   if (prefix.startsWith('component://')) {
@@ -150,7 +166,7 @@ export function pathLabels(prefix: string, fromFsPath: string, index: WorkspaceI
     return rootedLabels(prefix, 'classpath://', index);
   }
   if (prefix.startsWith('./') || prefix.startsWith('../')) {
-    return relativeLabels(prefix, fromFsPath, index);
+    return relativeLabels(prefix, fromFsPath, index, resolve === 'screen' ? screenFileBase(fromFsPath) : undefined);
   }
   if (prefix.startsWith('//')) {
     return shorthandLabels(prefix, index);
@@ -204,41 +220,62 @@ export function templateReferenceLocations(template: WidgetTemplateDef, index: W
   return locations;
 }
 
-function pathAttribute(element: ScanElement): { attribute: ScanAttribute; templateInclude: boolean } | undefined {
+function pathAttribute(
+  element: ScanElement,
+): { attribute: ScanAttribute; templateInclude: boolean; resolve: PathResolve } | undefined {
   if (element.name === 'widget-template-include') {
     const location = attribute(element, 'location');
-    return location ? { attribute: location, templateInclude: true } : undefined;
+    return location ? { attribute: location, templateInclude: true, resolve: 'file' } : undefined;
   }
   if (LOCATION_TAGS.has(element.name)) {
     const location = attribute(element, 'location');
-    return location ? { attribute: location, templateInclude: false } : undefined;
+    return location ? { attribute: location, templateInclude: false, resolve: 'file' } : undefined;
   }
   if (URL_TAGS.has(element.name)) {
     const url = attribute(element, 'url');
-    return url ? { attribute: url, templateInclude: false } : undefined;
+    if (!url || omitScreenUrlPath(element)) {
+      return undefined;
+    }
+    return { attribute: url, templateInclude: false, resolve: urlResolve(element) };
   }
   if (element.name === 'screen' || element.name === 'screen-extend') {
     if (attribute(element, 'menu-image-type')?.value.trim() === 'icon') {
       return undefined;
     }
     const image = attribute(element, 'menu-image');
-    return image ? { attribute: image, templateInclude: false } : undefined;
+    return image ? { attribute: image, templateInclude: false, resolve: 'file' } : undefined;
   }
   if (element.name === 'screen-text-output') {
     const location = attribute(element, 'macro-template-location');
-    return location ? { attribute: location, templateInclude: false } : undefined;
+    return location ? { attribute: location, templateInclude: false, resolve: 'file' } : undefined;
   }
   if (element.name === 'resource-facade') {
     const location = attribute(element, 'xml-actions-template-location');
-    return location ? { attribute: location, templateInclude: false } : undefined;
+    return location ? { attribute: location, templateInclude: false, resolve: 'file' } : undefined;
   }
   return undefined;
+}
+
+function urlResolve(element: ScanElement): PathResolve {
+  if (!SCREEN_URL_TAGS.has(element.name)) {
+    return 'file';
+  }
+  const explicit = attribute(element, 'url-type')?.value.trim();
+  const kind = explicit || (element.name === 'link' ? 'transition' : 'screen-path');
+  if (kind === 'plain') {
+    return 'plain';
+  }
+  if (kind === 'transition' || kind === 'screen' || kind === 'screen-path') {
+    return 'screen';
+  }
+  return 'file';
 }
 
 function pathRef(
   attr: ScanAttribute,
   positionAt: (offset: number) => { line: number; character: number },
   templateInclude: boolean,
+  resolve: PathResolve,
 ): PathRef {
   const hash = templateInclude ? attr.raw.indexOf('#') : -1;
   if (hash >= 0) {
@@ -252,6 +289,7 @@ function pathRef(
       endOffset: attr.startOffset + hash,
       dynamic: rawFile.includes('${'),
       templateInclude: true,
+      resolve,
       fragment: decodeEntities(rawFragment).trim(),
       fragmentRange: { start: positionAt(fragmentStart), end: positionAt(attr.endOffset) },
       fragmentStart,
@@ -266,6 +304,7 @@ function pathRef(
     endOffset: attr.endOffset,
     dynamic: attr.raw.includes('${'),
     templateInclude,
+    resolve,
   };
 }
 
@@ -274,8 +313,23 @@ function resolvePathFile(
   fromFsPath: string,
   index: WorkspaceIndex,
 ): { status: 'skip' } | { status: 'ok'; fsPath: string } | { status: 'missing' } {
-  if (ref.dynamic || !ref.lookup || ref.lookup === '.' || ref.lookup === '..') {
+  if (ref.resolve === 'plain' || ref.dynamic || !ref.lookup || ref.lookup === '.' || ref.lookup === '..') {
     return { status: 'skip' };
+  }
+  if (ref.resolve === 'screen') {
+    const query = ref.lookup.indexOf('?');
+    const target = (query < 0 ? ref.lookup : ref.lookup.slice(0, query)).trim();
+    if (target.startsWith('.')) {
+      const resolved = resolveRuntimeScreenPath(ref.lookup, fromFsPath, index);
+      if (resolved.status === 'skip') {
+        return { status: 'skip' };
+      }
+      if (resolved.status === 'missing') {
+        return { status: 'missing' };
+      }
+      const found = resolved.records.map((record) => index.symbolPath(record)).find((item): item is string => !!item);
+      return found ? { status: 'ok', fsPath: found } : { status: 'missing' };
+    }
   }
   const located = resolveResourceLocation(ref.lookup, fromFsPath, index);
   if (located.status === 'ok') {
@@ -319,23 +373,31 @@ function componentLabels(prefix: string, index: WorkspaceIndex): PathLabel[] {
   return dedupeLabels(labels.filter((item) => item.label.startsWith(prefix)));
 }
 
-function relativeLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex): PathLabel[] {
+function relativeLabels(prefix: string, fromFsPath: string, index: WorkspaceIndex, base?: string): PathLabel[] {
   if (!fromFsPath) {
     return [];
   }
   const last = prefix.lastIndexOf('/');
   const parentPart = toPosix(prefix.slice(0, last));
   const partial = prefix.slice(last + 1);
-  const dir = path.normalize(path.resolve(path.dirname(fromFsPath), parentPart));
+  const dir = path.normalize(path.resolve(base ?? path.dirname(fromFsPath), parentPart));
   if (!insideBases(dir, index.getWorkspaceRoots())) {
     return [];
   }
   const labels: PathLabel[] = [];
   for (const child of listChildren(dir, partial)) {
     const suffix = child.directory ? '/' : '';
-    labels.push({ label: `${parentPart}/${child.name}${suffix}`, directory: child.directory });
+    const name = screenFileName(child.name, child.directory, base !== undefined);
+    labels.push({ label: `${parentPart}/${name}${suffix}`, directory: child.directory });
   }
   return dedupeLabels(labels.filter((item) => item.label.startsWith(prefix)));
+}
+
+function screenFileName(name: string, directory: boolean, screenPath: boolean): string {
+  if (!screenPath || directory || !name.toLowerCase().endsWith('.xml')) {
+    return name;
+  }
+  return name.slice(0, -4);
 }
 
 function shorthandLabels(prefix: string, index: WorkspaceIndex): PathLabel[] {

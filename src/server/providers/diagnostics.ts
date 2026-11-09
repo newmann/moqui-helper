@@ -1,7 +1,7 @@
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
 import { WorkspaceIndex } from '../index/workspace';
 import { formatMessage, Messages } from '../messages';
-import { collectMemberRefs, collectRefs } from '../refs/classify';
+import { collectDynamicScreenUrls, collectMemberRefs, collectRefs } from '../refs/classify';
 import { collectEntityMemberRefs, resolveEntityMemberRef } from '../refs/entityMembers';
 import { describeTag } from '../refs/facade';
 import { facadeDataChain } from '../refs/facadeScope';
@@ -30,6 +30,14 @@ export function collectDiagnostics(
       severity: DiagnosticSeverity.Error,
       source: 'moqui-helper',
       message: formatMessage(messages, result.messageKey, ...result.messageArgs),
+    });
+  }
+  for (const ref of collectDynamicScreenUrls(text)) {
+    diagnostics.push({
+      range: ref.range,
+      severity: DiagnosticSeverity.Warning,
+      source: 'moqui-helper',
+      message: formatMessage(messages, 'dynamicUrl', ref.lookup),
     });
   }
   for (const ref of collectMemberRefs(text)) {
